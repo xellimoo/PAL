@@ -1,0 +1,24 @@
+# Build output / packaged ZIPs
+dist/
+*.zip
+*.tgz
+
+# Chrome Web Store submission material — kept local, not in the public repo
+STORE_LISTING.md
+build.sh
+icons/icon512.png
+store/
+# PRIVACY.md is intentionally tracked — it's the public privacy-policy URL.
+
+# Tooling / machine-specific
+.claude/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local secrets (none should ever be committed)
+.env
+*.local

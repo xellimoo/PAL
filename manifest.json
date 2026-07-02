@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "PAL — Pause, Ask, Learn",
+  "version": "0.5.15",
+  "description": "Pause a video, ask your own AI about the moment, and learn. Context-aware tutor; bring your own key (OpenAI/Anthropic/Gemini).",
+  "homepage_url": "https://github.com/0prrr/PAL",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "src/service_worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "PAL — Pause, Ask, Learn",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "src/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
