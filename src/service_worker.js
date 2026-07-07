@@ -58,14 +58,19 @@ function notify(title, message) {
 async function handleMessage(msg, port) {
   try {
     if (msg.type === "GET_STATE") {
-      const s = await loadSettings();
-      port.postMessage({
-        type: "STATE",
-        configured: !!(s && s.baseUrl && s.key),
-        locked: !!(s && s.key && s.key.enc && !sessionKey),
-        spec: s?.spec,
-        model: s?.model,
+      port.postMessage(buildState(await loadSettings()));
+      return;
+    }
+
+    if (msg.type === "SET_ACTIVE_PROFILE") {
+      // The unlocked session key belonged to the previous profile; drop it so an
+      // encrypted active profile correctly re-prompts for the passphrase.
+      sessionKey = null;
+      const { vt_settings } = await chrome.storage.local.get("vt_settings");
+      await chrome.storage.local.set({
+        vt_settings: { ...(vt_settings || {}), activeProfileId: msg.profileId },
       });
+      broadcast(buildState(await loadSettings()));
       return;
     }
 
@@ -115,9 +120,37 @@ async function handleMessage(msg, port) {
   }
 }
 
+function buildState(s) {
+  return {
+    type: "STATE",
+    configured: !!(s && s.baseUrl && s.key),
+    locked: !!(s && s.key && s.key.enc && !sessionKey),
+    spec: s?.spec,
+    model: s?.model,
+    profiles: s?.profiles || [],
+    activeProfileId: s?.activeProfileId,
+  };
+}
+
 async function loadSettings() {
-  const { vt_settings } = await chrome.storage.local.get("vt_settings");
-  return vt_settings || null;
+  const { vt_settings, vt_profiles } = await chrome.storage.local.get(["vt_settings", "vt_profiles"]);
+  if (!vt_settings) return null;
+  const profiles = Array.isArray(vt_profiles) ? vt_profiles : [];
+  if (profiles.length) {
+    // Resolve the active provider profile and surface its spec/baseUrl/model/key.
+    const active = profiles.find((p) => p.id === vt_settings.activeProfileId) || profiles[0];
+    return {
+      ...vt_settings,
+      spec: active.spec,
+      baseUrl: active.baseUrl,
+      model: active.model,
+      key: active.key,
+      activeProfileId: active.id,
+      profiles: profiles.map((p) => ({ id: p.id, name: p.name })),
+    };
+  }
+  // Legacy shape (pre-profiles): provider fields live directly on vt_settings.
+  return { ...vt_settings, profiles: [] };
 }
 
 async function resolveKey(settings, port) {

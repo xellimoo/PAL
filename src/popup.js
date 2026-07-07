@@ -100,6 +100,30 @@ function renderTokens(total) {
     `Σ tokens — in ${hk(total.input)} · out ${hk(total.output)} · cached ${hk(cached)}`;
 }
 
+// Provider switcher (only shown when >1 profile is saved). Rebuilt only when the
+// profile set/active changes, so it never clobbers the user mid-select.
+function renderProvider(profiles, activeId) {
+  const sel = $("provider");
+  const list = Array.isArray(profiles) ? profiles : [];
+  if (list.length <= 1) { sel.classList.add("hidden"); return; }
+  const sig = list.map((p) => p.id + ":" + (p.name || "")).join("|") + "@" + (activeId || "");
+  if (sel.dataset.sig === sig) return;
+  sel.dataset.sig = sig;
+  sel.innerHTML = "";
+  list.forEach((p) => {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = p.name || "(unnamed)";
+    sel.append(o);
+  });
+  sel.value = activeId || list[0].id;
+  sel.classList.remove("hidden");
+}
+$("provider").addEventListener("change", () => {
+  send({ type: "SET_ACTIVE_PROFILE", profileId: $("provider").value });
+  setStatus("Switching provider…");
+});
+
 function setStatus(text, isError) {
   if (!text) {
     statusEl.classList.add("hidden");
@@ -141,6 +165,7 @@ function onMessage(msg) {
       $("notconfigured").classList.toggle("hidden", msg.configured);
       $("unlock").classList.toggle("hidden", !msg.locked);
       askBtn.disabled = !msg.configured;
+      renderProvider(msg.profiles, msg.activeProfileId);
       break;
     case "NEED_CONFIG":
       $("notconfigured").classList.remove("hidden");

@@ -10,6 +10,16 @@
     <p class="hint">PAL = <b>Pause · Ask · Learn</b> — pause a video, ask your own AI, learn.</p>
 
     <section>
+      <label>Provider profiles</label>
+      <ul id="profileList" class="profile-list"></ul>
+      <button id="addProfile" class="secondary">+ Add profile</button>
+      <p class="hint">Each profile carries its own API key. Switch the active one from the popup header.</p>
+    </section>
+
+    <section class="profile-form">
+      <label id="formTitle">Add profile</label>
+      <input id="profileName" type="text" placeholder="Profile name (e.g. OpenAI, Claude, Local)" />
+
       <label>Provider spec type</label>
       <select id="spec">
         <option value="openai">OpenAI-compatible (OpenAI, DeepSeek, Kimi, GLM, MiniMax, Groq, vLLM, Ollama, LM Studio)</option>
@@ -17,36 +27,35 @@
         <option value="gemini">Gemini (native)</option>
       </select>
       <p class="hint" id="spec-hint"></p>
-    </section>
 
-    <section>
       <label>Base URL</label>
-      <input id="baseUrl" type="text" placeholder="https://api.openai.com/v1" />
+      <input id="baseUrl" type="text" placeholder="https://api.example.com/v1" />
       <p class="hint">Must be HTTPS (localhost / 127.0.0.1 allowed for local models).</p>
-    </section>
 
-    <section>
       <label>Model</label>
-      <input id="model" type="text" placeholder="gpt-4o" />
-    </section>
+      <input id="model" type="text" placeholder="model name" />
 
-    <section>
       <label>API Key</label>
       <input id="apiKey" type="password" placeholder="sk-…" />
       <p class="hint">
-        Stored locally. <code>chrome.storage.local</code> is <b>not encrypted on disk</b>.
+        Stored locally with this profile. <code>chrome.storage.local</code> is <b>not encrypted on disk</b>.
         Add a passphrase below to wrap the key with AES-GCM (recommended on shared machines).
       </p>
-    </section>
 
-    <section>
-      <label>Encryption passphrase (optional)</label>
-      <input id="passphrase" type="password" placeholder="Leave blank to store the key unencrypted" />
-      <p class="hint">If set, you'll enter it once per browser session to unlock the key.</p>
+      <label>Encryption passphrase (optional — applies to all profiles)</label>
+      <input id="passphrase" type="password" placeholder="Leave blank to store keys unencrypted" />
+      <p class="hint">If set, you'll enter it once per browser session to unlock the active profile's key.</p>
+
+      <div class="actions">
+        <button id="save">Save</button>
+        <button id="cancelProfile" class="secondary">Cancel</button>
+        <span id="saved" class="saved hidden">Saved ✓</span>
+      </div>
+      <p class="hint">Save also stores the Advanced settings below.</p>
     </section>
 
     <details>
-      <summary>Advanced</summary>
+      <summary>Advanced (applies to all profiles)</summary>
       <section>
         <label>Max output tokens</label>
         <input id="maxTokens" type="number" value="65536" />
@@ -76,11 +85,6 @@
           sent anywhere.</p>
       </section>
     </details>
-
-    <div class="actions">
-      <button id="save">Save</button>
-      <span id="saved" class="saved hidden">Saved ✓</span>
-    </div>
 
     <section>
       <label>Cached transcripts</label>

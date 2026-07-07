@@ -29,3 +29,20 @@ button.secondary { background: #e7e4dd; color: #1f2330; }
 .saved { color: #15803d; font-weight: 600; }
 .err { color: #b91c1c; }
 .hidden { display: none !important; }
+
+/* Provider profiles */
+.profile-form { border: 1px solid #e7e4dd; border-radius: 8px; padding: 12px 14px; background: #fff; }
+.profile-list { list-style: none; padding: 0; margin: 0 0 8px; }
+.profile-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 11px; border: 1px solid #e7e4dd; border-radius: 8px;
+  margin-bottom: 6px; background: #fff;
+}
+.profile-row.active { border-color: #2563eb; background: #f4f8ff; }
+.profile-head { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.profile-name { font-weight: 600; }
+.profile-sub { color: #6b7280; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-ops { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.badge { font-size: 11px; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: .03em; }
+button.small { padding: 5px 10px; font-size: 12px; }
+button.danger { color: #b91c1c; }
