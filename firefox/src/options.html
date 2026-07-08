@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PAL — Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <h1><span class="logo">▶</span> PAL — Settings</h1>
+
+    <section>
+      <label>Provider profiles</label>
+      <ul id="profileList" class="profile-list"></ul>
+      <button id="addProfile" class="secondary">+ Add profile</button>
+    </section>
+
+    <section id="profileForm" class="profile-form hidden">
+      <label id="formTitle">Add profile</label>
+      <input id="profileName" type="text" placeholder="Profile name (e.g. OpenAI, Claude, Local)" />
+
+      <label>Provider spec type</label>
+      <select id="spec">
+        <option value="openai">OpenAI-compatible (OpenAI, DeepSeek, Kimi, GLM, MiniMax, Groq, vLLM, Ollama, LM Studio)</option>
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="gemini">Gemini (native)</option>
+      </select>
+      <p class="hint" id="spec-hint"></p>
+
+      <label>Base URL</label>
+      <input id="baseUrl" type="text" placeholder="https://api.example.com/v1" />
+      <p class="hint">Must be HTTPS (localhost / 127.0.0.1 allowed for local models).</p>
+
+      <label>Model</label>
+      <input id="model" type="text" placeholder="model name" />
+
+      <label>API Key</label>
+      <input id="apiKey" type="password" placeholder="sk-…" />
+      <p class="hint">
+        Stored locally with this profile. <code>chrome.storage.local</code> is <b>not encrypted on disk</b>.
+        Add a passphrase below to wrap the key with AES-GCM (recommended on shared machines).
+      </p>
+
+      <div id="oldPassRow" class="hidden">
+        <label>Current passphrase</label>
+        <input id="oldPassphrase" type="password" placeholder="Required to change the key or its passphrase" />
+      </div>
+
+      <label>Passphrase</label>
+      <input id="passphrase" type="password" placeholder="New passphrase (leave blank to keep current)" />
+      <p class="hint">Wraps this profile's key with AES-GCM. Leave blank to keep the current passphrase (or store the key unencrypted for a new profile).</p>
+
+      <div class="actions">
+        <button id="save">Save</button>
+        <button id="cancelProfile" class="secondary">Cancel</button>
+        <span id="saved" class="saved hidden">Saved ✓</span>
+      </div>
+      <p class="hint">Save also stores the Advanced settings below.</p>
+    </section>
+
+    <details>
+      <summary>Advanced (applies to all profiles)</summary>
+      <section>
+        <label>Max output tokens</label>
+        <input id="maxTokens" type="number" value="65536" />
+      </section>
+      <section>
+        <label>Context threshold (tokens) — full transcript at/under this, else window+summary</label>
+        <input id="contextThreshold" type="number" value="120000" />
+      </section>
+      <section>
+        <label>Window size (± minutes) for the windowed path</label>
+        <input id="windowMinutes" type="number" value="10" />
+      </section>
+      <section>
+        <label><input id="captionScrub" type="checkbox" checked style="width:auto" />
+          YouTube: read captions by briefly scanning (when direct download is blocked)</label>
+        <p class="hint">Requires CC to exist on the video. Causes a brief seek back-and-forth around your pause; the screenshot is taken first and the playhead is restored.</p>
+      </section>
+      <section>
+        <label>Caption scan window (± seconds)</label>
+        <input id="captionWindowSec" type="number" value="20" />
+      </section>
+      <section>
+        <label><input id="debug" type="checkbox" style="width:auto" />
+          Enable debug logging (service-worker console)</label>
+        <p class="hint">Off by default. Logs only the page domain and counts locally —
+          never your key, question, answer, transcript, or screenshot, and nothing is
+          sent anywhere.</p>
+      </section>
+    </details>
+
+    <section>
+      <label>Cached transcripts</label>
+      <p class="hint" id="cacheinfo">—</p>
+      <p class="hint">Stored locally per video (<code>chrome.storage.local</code>).
+        Browser "Clear cache" does <b>not</b> remove these. Shift-click ⤓ in the
+        popup refreshes a single video; the button below clears all.</p>
+      <button id="clearcache" class="secondary">Clear all cached transcripts</button>
+    </section>
+    <p id="err" class="err hidden"></p>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

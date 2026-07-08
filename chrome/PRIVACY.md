@@ -36,4 +36,4 @@ networks.
 
 ## Contact
 
-Open an issue on the project's GitHub repository at https://github.com/0prrr/PAL.git.
+Open an issue on the project's GitHub repository at https://github.com/xellimoo/PAL.git.

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand" title="Pause · Ask · Learn"><span class="logo">▶</span> PAL</div>
+      <div class="header-actions">
+        <select id="provider" class="provider-sel hidden" title="Active provider profile"></select>
+        <button id="loadtx" class="icon-btn hidden" title="Load full transcript (scan whole video, cached). Shift-click to force a refresh.">⤓</button>
+        <button id="pastetx" class="icon-btn hidden" title="Paste a transcript for this video (cached, reused for every question).">≡</button>
+        <button id="detach" class="icon-btn" title="Open in a resizable window">⧉</button>
+        <button id="settings" class="icon-btn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <div id="paste-pop" class="popover hidden" role="dialog" aria-label="Paste transcript">
+      <div class="popover-title">Paste this video's transcript</div>
+      <textarea id="paste-text" rows="8" spellcheck="false"
+        placeholder="Paste a transcript here — plain text, subtitles (VTT/SRT), or [0:12] timestamped text all work."></textarea>
+      <div class="row">
+        <button id="paste-save">Save</button>
+        <button id="paste-clear" class="secondary">Clear</button>
+        <button id="paste-cancel" class="secondary">Cancel</button>
+      </div>
+      <div class="popover-hint">Saved transcripts are cached for this page and reused for every question. Clear to go back to screenshot-only.</div>
+    </div>
+
+    <div id="notconfigured" class="banner hidden">
+      Not set up yet. <a href="#" id="open-options">Open settings</a> to add your
+      provider and API key.
+    </div>
+
+    <div id="unlock" class="banner hidden">
+      <div>Enter your passphrase to unlock the API key for this session.</div>
+      <div class="row">
+        <input id="passphrase" type="password" placeholder="Passphrase" autocomplete="off" />
+        <button id="unlock-btn">Unlock</button>
+      </div>
+    </div>
+
+    <div id="scrubconfirm" class="banner hidden">
+      <div id="scrubmsg"></div>
+      <div class="row">
+        <button id="scrub-yes"></button>
+        <button id="scrub-no" class="secondary">No, screenshot only</button>
+      </div>
+    </div>
+
+    <main id="log" aria-live="polite"></main>
+
+    <div id="status" class="status hidden"></div>
+
+    <div id="scrubctl" class="scrubctl hidden">
+      <span id="scrubprog"></span>
+      <button id="cancelscrub" class="secondary">Cancel</button>
+    </div>
+
+    <div id="tokens" class="tokens">
+      <span id="tok-text">Σ tokens — in 0 · out 0 · cached 0</span>
+      <button id="tok-reset" class="tok-reset" title="Reset token counter">⟲</button>
+    </div>
+
+    <footer>
+      <textarea id="prompt" rows="2" placeholder="Ask about what's on screen…"></textarea>
+      <button id="ask" disabled>Ask</button>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-# PAL — Pause · Ask · Learn (Chrome Extension)
+# PAL — Pause · Ask · Learn (Firefox Add-on)
 
 **PAL** (short for **Pause, Ask, Learn**) lets you pause an educational video,
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
@@ -97,30 +97,26 @@ src/options.*             settings (provider, base URL, model, key, passphrase, 
 icons/                    toolbar icons
 ```
 
-## Install from GitHub (load unpacked)
+## Install (Firefox)
 
-This extension is distributed as **source** — install it via Chrome's "load
-unpacked". There's nothing to build.
+This add-on is distributed as **source**. For dev/test, load it temporarily; for
+everyday use, install the signed build from AMO.
 
-**1. Get the code** (either way):
-- **Download:** on the GitHub page, *Code → Download ZIP* (or grab the ZIP from
-  *Releases*), then **unzip** it. Or download a tagged release asset.
-- **Clone:** `git clone https://github.com/0prrr/PAL.git`
+**Temporary load (dev/test) — nothing to build:**
+1. Download or clone this folder so `manifest.json` is at the top level.
+2. Open **about:debugging#/runtime/this-firefox**.
+3. Click **Load Temporary Add-on…** and pick `manifest.json` (or the built ZIP).
+4. The PAL icon appears in the toolbar. Temporary add-ons are removed when Firefox
+   closes.
 
-**2. Load it into Chrome:**
-1. Open **chrome://extensions**.
-2. Toggle **Developer mode** on (top-right).
-3. Click **Load unpacked** and select the folder that contains **`manifest.json`**
-   (if you downloaded a ZIP, that's the unzipped folder — open into it until you see
-   `manifest.json` at the top level).
-4. The PAL icon appears in the toolbar (pin it via the puzzle-piece menu).
+**From a built ZIP:**
+- Run `./build.sh` to produce `dist/PAL-Firefox-<version>.zip`, or grab the asset
+  from *Releases*. Install the signed version from AMO, or load the ZIP via
+  *about:debugging*.
 
-**Updating:** download/pull the newer version, then click the **reload ↻** icon on
-the extension's card at `chrome://extensions`. (Load-unpacked extensions don't
-auto-update.)
-
-> Chrome may show a "Disable developer-mode extensions" prompt on startup — that's
-> normal for unpacked extensions and can be dismissed.
+**Updating:** rebuild/pull, then click **Reload** next to the add-on at
+`about:debugging#/runtime/this-firefox`. (Temporary/unsigned builds don't
+auto-update; AMO-signed builds do.)
 
 ## Configure
 
@@ -142,7 +138,7 @@ auto-update.)
 > Use a **vision-capable** model if you want the screenshot used. Text-only models
 > (many local/OpenAI-compatible ones) still work — they just ignore the image.
 
-> On **Save**, Chrome asks to allow access to your endpoint's host (e.g. "read and
+> On **Save**, Firefox asks to allow access to your endpoint's host (e.g. "read and
 > change your data on api.openai.com") — that's required for PAL to reach it. The
 > first **Ask** from a detached window similarly requests access to the video site.
 
@@ -269,7 +265,7 @@ or screenshot) — and only to the local DevTools console, never over the networ
 
 - **Temml** (`src/lib/temml.mjs`) — LaTeX→MathML renderer by Ron Kok, MIT licensed.
   Bundled unmodified (no CDN, no network at runtime) so it works offline and within
-  MV3's CSP. MathML is rendered natively by Chrome, so no fonts or stylesheets are
+  MV3's CSP. MathML is rendered natively by Firefox, so no fonts or stylesheets are
   required for common math. Full license: `THIRD_PARTY_LICENSES.txt`.
 
 ## License
