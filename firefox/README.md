@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.5.18**.
+Current version: **0.6.0**.
 
 ## What it does
 
@@ -360,6 +360,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   success. Selecting a spec type no longer overwrites the Base URL / Model (generic
   placeholders), and the settings form got consistent field spacing. Legacy
   single-provider settings migrate into a profile automatically.
+- **0.6.0** — **Firefox support**: PAL now runs on Firefox (128+) alongside Chrome,
+  from one shared MV3 codebase (separate manifests in `chrome/` and `firefox/`).
+  Same features — BYOK provider profiles, YouTube + paste transcript, unlock cache,
+  etc.
 
 ## Disclaimer
 
