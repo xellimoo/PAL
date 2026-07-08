@@ -7,16 +7,14 @@
   </head>
   <body>
     <h1><span class="logo">▶</span> PAL — Settings</h1>
-    <p class="hint">PAL = <b>Pause · Ask · Learn</b> — pause a video, ask your own AI, learn.</p>
 
     <section>
       <label>Provider profiles</label>
       <ul id="profileList" class="profile-list"></ul>
       <button id="addProfile" class="secondary">+ Add profile</button>
-      <p class="hint">Each profile carries its own API key. Switch the active one from the popup header.</p>
     </section>
 
-    <section class="profile-form">
+    <section id="profileForm" class="profile-form hidden">
       <label id="formTitle">Add profile</label>
       <input id="profileName" type="text" placeholder="Profile name (e.g. OpenAI, Claude, Local)" />
 
@@ -42,9 +40,14 @@
         Add a passphrase below to wrap the key with AES-GCM (recommended on shared machines).
       </p>
 
-      <label>Encryption passphrase (optional — applies to all profiles)</label>
-      <input id="passphrase" type="password" placeholder="Leave blank to store keys unencrypted" />
-      <p class="hint">If set, you'll enter it once per browser session to unlock the active profile's key.</p>
+      <div id="oldPassRow" class="hidden">
+        <label>Current passphrase</label>
+        <input id="oldPassphrase" type="password" placeholder="Required to change the key or its passphrase" />
+      </div>
+
+      <label>Passphrase</label>
+      <input id="passphrase" type="password" placeholder="New passphrase (leave blank to keep current)" />
+      <p class="hint">Wraps this profile's key with AES-GCM. Leave blank to keep the current passphrase (or store the key unencrypted for a new profile).</p>
 
       <div class="actions">
         <button id="save">Save</button>

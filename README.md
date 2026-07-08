@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.5.15**.
+Current version: **0.5.18**.
 
 ## What it does
 
@@ -125,13 +125,16 @@ auto-update.)
 ## Configure
 
 1. Right-click the icon → **Options** (or click ⚙ in the popup).
-2. Pick a **spec type** and fill in **Base URL**, **Model**, **API Key**. Defaults
-   prefill per provider. OpenAI and Anthropic compatible. Examples:
+2. Under **Provider profiles**, click **+ Add profile** and fill in a **name**, the
+   **spec type**, **Base URL**, **Model**, and **API Key**. Add as many as you like
+   (e.g. one per provider) and switch the active one from the popup header. OpenAI and
+   Anthropic compatible. Examples:
    - OpenAI: `https://api.openai.com/v1` · `gpt-4o`
    - Anthropic: `https://api.anthropic.com/v1` · `claude-sonnet-4-6`
    - Gemini: `https://generativelanguage.googleapis.com/v1beta` · `gemini-2.5-flash`
-3. Optional: set an **encryption passphrase** to AES-GCM-wrap the key at rest.
-   You'll enter it once per browser session to unlock.
+3. Optional: set an **encryption passphrase** to AES-GCM-wrap each key at rest. Each
+   key is wrapped under its own random salt; unlock a profile's key once per browser
+   session (switching back to it doesn't re-prompt).
 4. **Advanced:** max output tokens (default 65536), context threshold (full vs.
    window), window minutes, and the YouTube caption-scan options.
 5. **Save**.
@@ -349,6 +352,18 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   or `[timestamp]` lines — which is cached per page and reused for every question
   (screenshot-only when none is provided). YouTube's download path is unchanged. Header
   icon buttons realigned to a single row.
+- **0.5.18** — **Provider profiles**: save multiple provider configs (spec type, base
+  URL, model, API key) and switch between them from the popup header; manage them
+  (add/edit/delete) on the settings page. Each key is wrapped under its own random
+  salt (independently encrypted). Unlocks are cached per profile in
+  `chrome.storage.session` (in-memory, never on disk) for the browser session, so
+  switching providers — or closing and reopening the popup — doesn't re-prompt; it's
+  cleared only when the browser exits. Changing a profile's passphrase requires the
+  current one; a guard confirms before storing a key unencrypted. The unlock field
+  starts empty (no browser autofill) and a stale "wrong passphrase" message clears on
+  success. Selecting a spec type no longer overwrites the Base URL / Model (generic
+  placeholders), and the settings form got consistent field spacing. Legacy
+  single-provider settings migrate into a profile automatically.
 
 ## Disclaimer
 

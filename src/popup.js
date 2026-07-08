@@ -164,6 +164,7 @@ function onMessage(msg) {
     case "STATE":
       $("notconfigured").classList.toggle("hidden", msg.configured);
       $("unlock").classList.toggle("hidden", !msg.locked);
+      if (msg.locked) $("passphrase").value = ""; // never show stale/autofilled dots
       askBtn.disabled = !msg.configured;
       renderProvider(msg.profiles, msg.activeProfileId);
       break;
@@ -174,11 +175,14 @@ function onMessage(msg) {
       break;
     case "NEED_PASSPHRASE":
       $("unlock").classList.remove("hidden");
+      $("passphrase").value = "";
       $("passphrase").focus();
       setStatus("");
       break;
     case "UNLOCKED":
       $("unlock").classList.add("hidden");
+      $("passphrase").value = "";
+      setStatus(""); // clear any "Wrong passphrase." error
       break;
     case "STATUS":
       setStatus(msg.text);
@@ -402,7 +406,9 @@ $("open-options").addEventListener("click", (e) => {
 });
 $("unlock-btn").addEventListener("click", () => {
   const pp = $("passphrase").value;
-  if (pp) send({ type: "UNLOCK", passphrase: pp });
+  if (!pp) return;
+  setStatus(""); // clear a previous "Wrong passphrase." while unlocking
+  send({ type: "UNLOCK", passphrase: pp });
 });
 $("passphrase").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("unlock-btn").click();

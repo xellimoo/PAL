@@ -1,4 +1,4 @@
-import { encryptSecret } from "./lib/crypto.js";
+import { encryptSecret, decryptSecret } from "./lib/crypto.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +39,10 @@ let profiles = [];        // [{id,name,spec,baseUrl,model,key}]
 let activeProfileId = null;
 let editingId = null;     // profile loaded into the form, or null = new
 
+// The add/edit form is hidden by default and appears only on Add / Edit.
+function showForm() { $("profileForm").classList.remove("hidden"); }
+function hideForm() { $("profileForm").classList.add("hidden"); }
+
 async function load() {
   const { vt_settings, vt_profiles } = await readStore();
   let settings = vt_settings || {};
@@ -67,9 +71,7 @@ async function load() {
   $("debug").checked = !!settings.debug;
 
   renderList();
-  const active = profiles.find((p) => p.id === activeProfileId) || profiles[0];
-  if (active) loadForm(active); else clearForm();
-  applySpecHint();
+  hideForm(); // form appears only when the user clicks Add or Edit
 }
 
 function renderList() {
@@ -94,7 +96,7 @@ function renderList() {
     if (p.id === activeProfileId) {
       const badge = document.createElement("span");
       badge.className = "badge";
-      badge.textContent = "active";
+      badge.textContent = "Active";
       ops.append(badge);
     } else {
       const use = document.createElement("button");
@@ -126,8 +128,11 @@ function loadForm(p) {
   $("baseUrl").value = p.baseUrl || "";
   $("model").value = p.model || "";
   $("apiKey").value = "";
-  $("apiKey").placeholder = p.key ? "•••••• (stored — leave blank to keep)" : "sk-…";
+  $("apiKey").placeholder = p.key ? "•••••• (Saved - leave blank to keep current)" : "sk-…";
+  $("oldPassphrase").value = "";
+  $("oldPassRow").classList.toggle("hidden", !(p.key && p.key.enc));
   applySpecHint();
+  showForm();
 }
 
 function clearForm() {
@@ -139,7 +144,10 @@ function clearForm() {
   $("model").value = "";
   $("apiKey").value = "";
   $("apiKey").placeholder = "sk-…";
+  $("oldPassphrase").value = "";
+  $("oldPassRow").classList.add("hidden");
   applySpecHint();
+  showForm();
 }
 
 // Persist the global (non-provider) prefs + active id, leaving profiles untouched.
@@ -167,6 +175,7 @@ async function save() {
   const model = $("model").value.trim();
   const apiKey = $("apiKey").value;
   const passphrase = $("passphrase").value;
+  const oldPass = $("oldPassphrase").value;
 
   if (!validUrl(baseUrl)) { showErr("Base URL must be HTTPS (or http://localhost / 127.0.0.1)."); return; }
   if (!model) { showErr("Model is required."); return; }
@@ -177,26 +186,45 @@ async function save() {
     await chrome.permissions.request({ origins: [`${u.protocol}//${u.hostname}/*`] });
   } catch {}
 
-  // Resolve the key: typed (new), kept (editing + blank), or required (new profile).
+  // Resolve the key. Re-wrapping an already-ENCRYPTED key needs the plaintext, which
+  // requires the CURRENT passphrase (you can't re-encrypt ciphertext directly).
   const existing = profiles.find((p) => p.id === editingId);
-  let key = existing?.key || null;
+  const enc = existing?.key;
+  let key;
   if (apiKey) {
-    key = passphrase ? await encryptSecret(apiKey, passphrase) : { enc: false, plain: apiKey };
+    // A freshly typed key gives us the plaintext directly.
+    if (passphrase) {
+      key = await encryptSecret(apiKey, passphrase);
+    } else {
+      if (!confirm("Storing the new key without a passphrase will leave it unencrypted on disk. Continue?")) return;
+      key = { enc: false, plain: apiKey };
+    }
   } else if (!editingId) {
     showErr("An API key is required for a new profile."); return;
-  } else if (passphrase && key && key.enc === false) {
-    // adding a passphrase to an existing plaintext key
-    key = await encryptSecret(key.plain, passphrase);
-  } else if (!key) {
+  } else if (!enc) {
     showErr("An API key is required."); return;
+  } else if (enc.enc === false) {
+    // Existing plaintext key: optionally wrap it with the new passphrase.
+    key = passphrase ? await encryptSecret(enc.plain, passphrase) : enc;
+  } else {
+    // Existing encrypted key.
+    if (!passphrase) {
+      key = enc; // not changing the passphrase → keep it wrapped as-is
+    } else {
+      if (!oldPass) { showErr("Enter the current passphrase to change it."); return; }
+      let plain;
+      try { plain = await decryptSecret(enc, oldPass); }
+      catch { showErr("Current passphrase is incorrect."); return; }
+      key = await encryptSecret(plain, passphrase);
+    }
   }
 
   const profile = { id: editingId || uid(), name, spec, baseUrl, model, key };
   if (editingId) {
     profiles = profiles.map((p) => (p.id === editingId ? profile : p));
   } else {
+    // Don't auto-activate: keep the current active profile; the user switches via the popup.
     profiles = [...profiles, profile];
-    activeProfileId = profile.id; // a freshly added profile becomes active
   }
 
   await chrome.storage.local.set({ vt_profiles: profiles });
@@ -204,11 +232,11 @@ async function save() {
 
   $("apiKey").value = "";
   $("passphrase").value = "";
+  $("oldPassphrase").value = "";
   renderList();
-  loadForm(profile);
   const s = $("saved");
   s.classList.remove("hidden");
-  setTimeout(() => s.classList.add("hidden"), 1500);
+  setTimeout(() => { s.classList.add("hidden"); hideForm(); }, 1200);
 }
 
 async function delProfile(id) {
@@ -219,8 +247,7 @@ async function delProfile(id) {
   await chrome.storage.local.set({ vt_profiles: profiles });
   await persistGlobals();
   renderList();
-  const active = profiles.find((p) => p.id === activeProfileId);
-  if (active) loadForm(active);
+  hideForm();
 }
 
 async function makeActive(id) {
@@ -232,10 +259,7 @@ async function makeActive(id) {
 $("spec").addEventListener("change", applySpecHint);
 $("save").addEventListener("click", save);
 $("addProfile").addEventListener("click", clearForm);
-$("cancelProfile").addEventListener("click", () => {
-  const active = profiles.find((p) => p.id === activeProfileId) || profiles[0];
-  if (active) loadForm(active); else clearForm();
-});
+$("cancelProfile").addEventListener("click", hideForm);
 
 // --- Cached transcript management ---
 async function refreshCacheInfo() {

@@ -6,9 +6,41 @@ import { decryptSecret } from "./lib/crypto.js";
 import { buildRequest, streamText } from "./lib/adapters.js";
 import { buildSystemPrompt, fmt } from "./lib/context.js";
 
-// Decrypted key cached in memory for the session only (never persisted in clear).
-let sessionKey = null; // the plaintext API key when unlocked
+// Decrypted keys cached for the browser session, one per profile so switching
+// providers (or closing/reopening the popup) doesn't re-prompt. Backed by
+// chrome.storage.session — in-memory only (never written to disk), it survives
+// service-worker recycling and is cleared when the browser exits. value: { pt, blob }.
+const unlockedKeys = new Map();
 let pendingAsk = null; // ask deferred until a passphrase unlocks the key
+
+// Hydrate the in-memory cache from session storage once per worker lifetime (the
+// worker may have been recycled while the popup was closed). Idempotent.
+let hydrated = null;
+function hydrate() {
+  if (!hydrated) {
+    hydrated = chrome.storage.session.get("vt_unlocked").then((s) => {
+      const obj = s.vt_unlocked || {};
+      for (const id of Object.keys(obj)) unlockedKeys.set(id, obj[id]);
+    }).catch(() => {});
+  }
+  return hydrated;
+}
+async function rememberUnlocked(id, pt, blob) {
+  unlockedKeys.set(id, { pt, blob });
+  try {
+    const obj = ((await chrome.storage.session.get("vt_unlocked")).vt_unlocked) || {};
+    obj[id] = { pt, blob };
+    await chrome.storage.session.set({ vt_unlocked: obj });
+  } catch {}
+}
+async function forgetUnlocked(id) {
+  unlockedKeys.delete(id);
+  try {
+    const obj = ((await chrome.storage.session.get("vt_unlocked")).vt_unlocked) || {};
+    delete obj[id];
+    await chrome.storage.session.set({ vt_unlocked: obj });
+  } catch {}
+}
 
 const ports = new Set();   // every open popup/window, for progress rebroadcast
 let scrubState = null;     // latest scrub status while one exists, else null
@@ -58,14 +90,16 @@ function notify(title, message) {
 async function handleMessage(msg, port) {
   try {
     if (msg.type === "GET_STATE") {
+      await hydrate();
       port.postMessage(buildState(await loadSettings()));
       return;
     }
 
     if (msg.type === "SET_ACTIVE_PROFILE") {
-      // The unlocked session key belonged to the previous profile; drop it so an
-      // encrypted active profile correctly re-prompts for the passphrase.
-      sessionKey = null;
+      await hydrate();
+      // Don't drop unlocked keys — each profile stays unlocked for the session, so
+      // switching back doesn't re-prompt. The active profile's locked state is
+      // derived from the per-profile cache in buildState / resolveKey.
       const { vt_settings } = await chrome.storage.local.get("vt_settings");
       await chrome.storage.local.set({
         vt_settings: { ...(vt_settings || {}), activeProfileId: msg.profileId },
@@ -75,13 +109,16 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "UNLOCK") {
+      await hydrate();
       const s = await loadSettings();
+      let pt;
       try {
-        sessionKey = await decryptSecret(s.key, msg.passphrase);
+        pt = await decryptSecret(s.key, msg.passphrase);
       } catch {
         port.postMessage({ type: "ERROR", message: "Wrong passphrase." });
         return;
       }
+      await rememberUnlocked(s.activeProfileId, pt, s.key);
       port.postMessage({ type: "UNLOCKED" });
       if (pendingAsk) {
         const a = pendingAsk;
@@ -124,7 +161,7 @@ function buildState(s) {
   return {
     type: "STATE",
     configured: !!(s && s.baseUrl && s.key),
-    locked: !!(s && s.key && s.key.enc && !sessionKey),
+    locked: !!(s && s.key && s.key.enc && !isUnlocked(s.activeProfileId, s.key)),
     spec: s?.spec,
     model: s?.model,
     profiles: s?.profiles || [],
@@ -153,11 +190,27 @@ async function loadSettings() {
   return { ...vt_settings, profiles: [] };
 }
 
+// Two encrypted-key blobs describe "the same key" when their ciphertext+salt+iv match.
+function sameKey(a, b) {
+  return !!a && !!b && a.ct === b.ct && a.salt === b.salt && a.iv === b.iv;
+}
+// A profile counts as unlocked if it's plaintext, or its current encrypted key
+// matches one already decrypted this session.
+function isUnlocked(id, key) {
+  if (!key || !key.enc) return true;
+  const e = unlockedKeys.get(id);
+  return !!e && sameKey(e.blob, key);
+}
+
 async function resolveKey(settings, port) {
   if (!settings.key) throw new Error("Not configured. Open the options page.");
   if (!settings.key.enc) return settings.key.plain; // plaintext mode
-  if (sessionKey) return sessionKey;
-  return null; // locked — caller must prompt for passphrase
+  await hydrate();
+  const id = settings.activeProfileId;
+  const e = unlockedKeys.get(id);
+  if (e && sameKey(e.blob, settings.key)) return e.pt;
+  if (e) await forgetUnlocked(id); // stale — the profile's key changed; re-prompt
+  return null; // locked — caller must prompt for the passphrase
 }
 
 // Defense-in-depth: re-check the endpoint scheme here, not just in the options UI,
