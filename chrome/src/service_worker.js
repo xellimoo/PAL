@@ -966,9 +966,15 @@ async function captureAndCrop(windowId, rect, dpr) {
 // fall back to the XML formats.
 async function ytCaptions() {
   function decode(s) {
-    const t = document.createElement("textarea");
-    t.innerHTML = s;
-    return t.value;
+    // Decode HTML entities without innerHTML (keeps the AMO unsafe-assignment lint clean).
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+    return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+      if (e[0] === "#") {
+        const c = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return Number.isNaN(c) ? m : String.fromCharCode(c);
+      }
+      return named[e.toLowerCase()] || m;
+    });
   }
   function parseJson3(text) {
     const data = JSON.parse(text);
@@ -1073,9 +1079,15 @@ async function ytCaptions() {
 async function ytCaptionsViaPlayer() {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   function decode(s) {
-    const t = document.createElement("textarea");
-    t.innerHTML = s;
-    return t.value;
+    // Decode HTML entities without innerHTML (keeps the AMO unsafe-assignment lint clean).
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+    return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+      if (e[0] === "#") {
+        const c = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return Number.isNaN(c) ? m : String.fromCharCode(c);
+      }
+      return named[e.toLowerCase()] || m;
+    });
   }
   function parseJson3(text) {
     const data = JSON.parse(text);
@@ -1303,9 +1315,14 @@ async function ytPlayerAndroid() {
     if (!pick?.baseUrl) return { ok: false, reason: "player: no baseUrl" };
 
     function decodeXml(s) {
-      const t = document.createElement("textarea");
-      t.innerHTML = s;
-      return t.value;
+      const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+      return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+        if (e[0] === "#") {
+          const c = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+          return Number.isNaN(c) ? m : String.fromCharCode(c);
+        }
+        return named[e.toLowerCase()] || m;
+      });
     }
     const base = pick.baseUrl.replace(/([?&])fmt=[^&]*/g, "$1").replace(/[?&]$/, "");
     const fetchCaptions = async (param) => {
