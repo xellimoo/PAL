@@ -6,7 +6,7 @@
   "homepage_url": "https://github.com/xellimoo/PAL",
   "browser_specific_settings": {
     "gecko": {
-      "id": "pal@xellimoo",
+      "id": "pal-af8b@xellimoo",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["websiteContent", "authenticationInfo"]
