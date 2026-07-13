@@ -45,6 +45,12 @@ async function ensureAccess(tab, needLLM) {
   const origins = [];
   if (needLLM && llmOriginPattern) origins.push(llmOriginPattern);
   if (DETACHED && tab?.url) origins.push(originPattern(tab.url));
+  if (!origins.length) return true;
+  if (DETACHED) {
+    // The detached window can't show a permission prompt (Firefox), so just verify
+    // the origins are already granted (pre-granted via Options + the detach button).
+    return chrome.permissions.contains({ origins });
+  }
   return ensureOrigins(origins);
 }
 
@@ -303,7 +309,12 @@ async function ask() {
   const tab = await getTargetTab();
   // Ask for host access before doing anything that would lose the typed question.
   if (!(await ensureAccess(tab, true))) {
-    setStatus("Site access is required (your AI endpoint" + (DETACHED ? " and the video site" : "") + "). Click Ask to grant it.", true);
+    setStatus(
+      DETACHED
+        ? "Site access is required. Open the PAL toolbar popup, click detach, and grant access — then retry."
+        : "Site access is required (your AI endpoint). Click Ask to grant it.",
+      true
+    );
     return;
   }
   promptEl.value = "";
@@ -383,10 +394,10 @@ async function exportQA() {
   const key = `vt_hist_${tab.id}`;
   const hist = (await chrome.storage.session.get(key))[key] || [];
   if (!hist.length) { setStatus("No questions to export yet.", true); return; }
-  if (!(await ensureAccess(tab, false))) {
-    setStatus("Site access is required to read the video title.", true);
-    return;
-  }
+  // Best-effort site access so we can read the video title (Chrome prompts for it
+  // from the detached window). Firefox doesn't surface a prompt here, so the title
+  // probe below just falls back to a derived title — the export never blocks on it.
+  await ensureAccess(tab, false);
 
   // Video title: og:title -> document.title; else summarize from the first question.
   let title = "";
@@ -455,6 +466,14 @@ $("cancelscrub").addEventListener("click", () => {
 });
 const DETACHED_WIN_KEY = "vt_detached_win";
 $("detach").addEventListener("click", async () => {
+  // The detached window can't prompt for host access (Firefox doesn't surface
+  // permissions.request from a windows.create popup) and Firefox won't grant a
+  // wildcard, so grant the LLM endpoint + the current video site's host NOW from
+  // this action popup (which CAN prompt for specific hosts). The detached window
+  // inherits the grant.
+  const tab = await getTargetTab();
+  const origins = [llmOriginPattern, tab?.url && originPattern(tab.url)].filter(Boolean);
+  if (origins.length) await ensureOrigins(origins);
   const url = chrome.runtime.getURL("src/popup.html") + "?window=1";
   // Single instance: if our detached window still exists, focus it instead of
   // opening another. We match by stored window id because matching by tab.url

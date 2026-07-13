@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.7.1**.
+Current version: **0.7.2**.
 
 ## What it does
 
@@ -372,6 +372,11 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   export button now appears the moment a question is asked; and the view no longer
   auto-scrolls to the bottom while a reply streams if you've scrolled up to read
   earlier output.
+- **0.7.2** — Fix detached-window host access on Firefox: the detach button now
+  grants the specific video site + your AI endpoint (Firefox won't grant a
+  wildcard), and the detached window checks rather than requests access (it can't
+  show a permission prompt). Export also no longer blocks when the video title
+  can't be read — it falls back to a derived title.
 
 ## Disclaimer
 
