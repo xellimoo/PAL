@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.6.0**.
+Current version: **0.7.1**.
 
 ## What it does
 
@@ -372,6 +372,14 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   from one shared MV3 codebase (separate manifests in `chrome/` and `firefox/`).
   Same features — BYOK provider profiles, YouTube + paste transcript, unlock cache,
   etc.
+- **0.7.0** — **Export Q&A as Markdown**: a new button in the popup header exports
+  the current tab's questions and answers to a `.md` file — with the video title
+  (read from the page, else derived from the first question), the source URL, and an
+  export timestamp — for saving as notes.
+- **0.7.1** — Toolbar icons replaced with consistent, base-aligned inline SVGs; the
+  export button now appears the moment a question is asked; and the view no longer
+  auto-scrolls to the bottom while a reply streams if you've scrolled up to read
+  earlier output.
 
 ## Disclaimer
 

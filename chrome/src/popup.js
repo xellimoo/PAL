@@ -143,6 +143,12 @@ function hideScrub() {
   $("scrubctl").classList.add("hidden");
 }
 
+// Only follow new content if the user is already near the bottom; if they've
+// scrolled up to read earlier output, don't yank them down while it streams.
+function stickToBottom() {
+  if (log.scrollHeight - log.scrollTop - log.clientHeight < 60) log.scrollTop = log.scrollHeight;
+}
+
 function addTurn(q) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
@@ -155,7 +161,7 @@ function addTurn(q) {
   aEl.textContent = "";
   wrap.append(qEl, aEl);
   log.append(wrap);
-  log.scrollTop = log.scrollHeight;
+  stickToBottom();
   return aEl;
 }
 
@@ -194,7 +200,7 @@ function onMessage(msg) {
       if (activeAnswerEl) {
         activeRaw += msg.text;
         activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
-        log.scrollTop = log.scrollHeight;
+        stickToBottom();
       }
       break;
     case "USAGE": {
@@ -210,6 +216,7 @@ function onMessage(msg) {
     case "DONE":
       askBtn.disabled = false;
       activeAnswerEl = null;
+      $("exportqa").classList.remove("hidden"); // there's now a Q&A to export
       break;
     case "TX_PROGRESS":
       showScrub(`${msg.resumed ? "Resuming" : "Loading"} transcript… ${msg.pct}% (${msg.count} lines)`);
@@ -303,6 +310,7 @@ async function ask() {
   chrome.storage.session.remove(draftKey); // submitted — clear the saved draft
   askBtn.disabled = true;
   activeAnswerEl = addTurn(prompt);
+  $("exportqa").classList.remove("hidden"); // a Q&A is now in progress — show export immediately
   activeRaw = "";
   setStatus("Working…");
   send({ type: "ASK", prompt, tabId: tab?.id, windowId: tab?.windowId });
@@ -364,6 +372,72 @@ document.addEventListener("click", (e) => {
   if (pastePop.contains(e.target) || e.target === $("pastetx")) return;
   pastePop.classList.add("hidden");
 });
+
+// --- Export Q&A as Markdown ---
+// Gathers this tab's questions/answers plus the video's title (from the page, when
+// available) into a .md file the user can save as a note. Title falls back to a
+// short derivation from the first question when the page exposes none.
+async function exportQA() {
+  const tab = await getTargetTab();
+  if (!tab) { setStatus("No active tab to export from.", true); return; }
+  const key = `vt_hist_${tab.id}`;
+  const hist = (await chrome.storage.session.get(key))[key] || [];
+  if (!hist.length) { setStatus("No questions to export yet.", true); return; }
+  if (!(await ensureAccess(tab, false))) {
+    setStatus("Site access is required to read the video title.", true);
+    return;
+  }
+
+  // Video title: og:title -> document.title; else summarize from the first question.
+  let title = "";
+  try {
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () =>
+        (document.querySelector('meta[property="og:title"]')?.content || document.title || "").trim(),
+    });
+    title = (r?.result || "").trim();
+  } catch {}
+  if (!title) {
+    const q = (hist[0].q || "").trim();
+    title = (q.slice(0, 80) + (q.length > 80 ? "…" : "")) || "PAL Q&A";
+  }
+
+  const url = tab.url || "";
+  let host = "";
+  try { host = new URL(url).hostname; } catch {}
+  const md = buildMarkdown({ title, url, host, when: new Date().toLocaleString(), hist });
+  downloadText(md, "PAL - " + sanitizeName(title).slice(0, 60) + ".md");
+  setStatus(`Exported ${hist.length} Q&A as Markdown.`);
+}
+
+function buildMarkdown({ title, url, host, when, hist }) {
+  const L = [`# ${title}`, ""];
+  if (url) L.push(`**Source:** ${url}`);
+  if (host) L.push(`**Site:** ${host}`);
+  L.push(`**Exported:** ${when}`, "", "---", "");
+  hist.forEach((t, i) => {
+    L.push(`## Q${i + 1}: ${(t.q || "").trim()}`, "", (t.a || "").trim(), "");
+  });
+  return L.join("\n").trim() + "\n";
+}
+
+function sanitizeName(s) {
+  return (s || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Q&A";
+}
+
+function downloadText(text, filename) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+$("exportqa").addEventListener("click", exportQA);
 
 $("scrub-yes").addEventListener("click", () => {
   $("scrubconfirm").classList.add("hidden");
@@ -436,6 +510,7 @@ $("passphrase").addEventListener("keydown", (e) => {
       const aEl = addTurn(t.q);
       aEl.innerHTML = renderMarkdown(t.a);
     }
+    $("exportqa").classList.toggle("hidden", hist.length === 0);
     // Restore an unsent draft for this tab.
     if (store[draftKey]) promptEl.value = store[draftKey];
   }
