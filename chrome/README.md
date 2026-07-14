@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.7.2**.
+Current version: **0.7.3**.
 
 ## What it does
 
@@ -385,6 +385,12 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   wildcard), and the detached window checks rather than requests access (it can't
   show a permission prompt). Export also no longer blocks when the video title
   can't be read — it falls back to a derived title.
+- **0.7.3** — Answers survive popup close: the service worker tracks in-flight
+  answers per tab so a reopened popup reattaches to the stream (live) or recovers
+  the partial from session storage (if the worker was recycled). The question is
+  persisted immediately on Ask — before the slow setup — so closing the popup
+  right after asking no longer loses it. Firefox detached-window error message now
+  guides users to right-click the icon → "Always Allow on [site]".
 
 ## Disclaimer
 

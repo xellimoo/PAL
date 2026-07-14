@@ -202,6 +202,20 @@ function onMessage(msg) {
     case "ANSWER_START":
       setStatus("Generating…");
       break;
+    case "ANSWER_RESUME":
+      // Reattached to an answer that was streaming when the popup closed/reopened.
+      activeAnswerEl = addTurn(msg.prompt);
+      activeRaw = msg.full || "";
+      activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+      stickToBottom();
+      $("exportqa").classList.remove("hidden");
+      if (msg.terminated) {
+        setStatus("Answer was interrupted when the popup closed. Partial shown — re-ask to continue.");
+        activeAnswerEl = null; // no more TOKENs coming
+      } else {
+        setStatus("Generating…"); // the SW is still streaming — TOKENs will follow
+      }
+      break;
     case "TOKEN":
       if (activeAnswerEl) {
         activeRaw += msg.text;
@@ -311,7 +325,7 @@ async function ask() {
   if (!(await ensureAccess(tab, true))) {
     setStatus(
       DETACHED
-        ? "Site access is required. Open the PAL toolbar popup, click detach, and grant access — then retry."
+        ? "Site access is required. Right-click the PAL toolbar icon and choose 'Always Allow on [this site]', then retry."
         : "Site access is required (your AI endpoint). Click Ask to grant it.",
       true
     );
@@ -546,4 +560,6 @@ $("passphrase").addEventListener("keydown", (e) => {
   // Show the running token total immediately.
   renderTokens((await chrome.storage.local.get("vt_usage")).vt_usage);
   send({ type: "GET_STATE" });
+  // Reattach to an answer that was streaming when the popup closed/reopened.
+  if (tab?.id != null) send({ type: "RESUME_ASK", tabId: tab.id });
 })();
