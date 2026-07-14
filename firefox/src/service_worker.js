@@ -12,6 +12,9 @@ import { buildSystemPrompt, fmt } from "./lib/context.js";
 // service-worker recycling and is cleared when the browser exits. value: { pt, blob }.
 const unlockedKeys = new Map();
 let pendingAsk = null; // ask deferred until a passphrase unlocks the key
+// In-flight answers, keyed by tab id, so a popup that closed mid-answer can reopen
+// and reattach (receive what streamed so far + keep streaming). value: { prompt, full, port, tabId }
+const activeAsks = new Map();
 
 // Hydrate the in-memory cache from session storage once per worker lifetime (the
 // worker may have been recycled while the popup was closed). Idempotent.
@@ -133,6 +136,20 @@ async function handleMessage(msg, port) {
       return;
     }
 
+    if (msg.type === "RESUME_ASK") {
+      // A popup reopened mid-answer: reattach if the SW is still streaming, or
+      // recover the partial from storage if the SW was recycled mid-answer.
+      const ask = activeAsks.get(msg.tabId);
+      if (ask) {
+        ask.port = port;
+        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full });
+      } else {
+        const prog = (await chrome.storage.session.get(`vt_prog_${msg.tabId}`))[`vt_prog_${msg.tabId}`];
+        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true });
+      }
+      return;
+    }
+
     if (msg.type === "LOAD_FULL_TRANSCRIPT") {
       loadFullTranscript(msg.tabId, port, msg.force);
       return;
@@ -227,6 +244,7 @@ function isAllowedEndpoint(u) {
 }
 
 async function runAsk(prompt, tabId, port) {
+  let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
     if (!settings || !settings.baseUrl || !settings.key) {
@@ -255,6 +273,14 @@ async function runAsk(prompt, tabId, port) {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     }
     if (!tab) throw new Error("No video tab found.");
+
+    // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
+    // setup — so a popup that closed right after Ask and reopens during setup can
+    // reattach (RESUME_ASK finds the entry) and the question survives SW termination.
+    ask = { prompt, full: "", port, tabId: tab.id, saved: 0 };
+    activeAsks.set(tab.id, ask);
+    const progKey = `vt_prog_${tab.id}`;
+    chrome.storage.session.set({ [progKey]: { q: prompt, a: "" } }).catch(() => {});
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
@@ -548,22 +574,28 @@ async function runAsk(prompt, tabId, port) {
       throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 500)}`);
     }
 
-    port.postMessage({ type: "ANSWER_START" });
-    let full = "";
+    safePost(ask.port, { type: "ANSWER_START" });
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     for await (const chunk of streamText(settings.spec || "openai", resp, usage)) {
-      full += chunk;
-      safePost(port, { type: "TOKEN", text: chunk });
+      ask.full += chunk;
+      safePost(ask.port, { type: "TOKEN", text: chunk });
+      if (ask.full.length - ask.saved >= 200) {
+        ask.saved = ask.full.length;
+        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full } }).catch(() => {});
+      }
     }
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(tab.id, prompt, full);
+    await appendHistory(tab.id, prompt, ask.full);
+    activeAsks.delete(tab.id);
+    chrome.storage.session.remove(progKey).catch(() => {});
 
     // Accumulate a running token total and report turn + total.
     const total = await addUsage(usage);
-    safePost(port, { type: "USAGE", turn: usage, total });
-    safePost(port, { type: "DONE", full });
+    safePost(ask.port, { type: "USAGE", turn: usage, total });
+    safePost(ask.port, { type: "DONE", full: ask.full });
   } catch (e) {
-    safePost(port, { type: "ERROR", message: String(e?.message || e) });
+    if (ask) { activeAsks.delete(ask.tabId); chrome.storage.session.remove(`vt_prog_${ask.tabId}`).catch(() => {}); }
+    safePost(ask?.port || port, { type: "ERROR", message: String(e?.message || e) });
   }
 }
 

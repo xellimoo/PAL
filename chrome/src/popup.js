@@ -45,6 +45,12 @@ async function ensureAccess(tab, needLLM) {
   const origins = [];
   if (needLLM && llmOriginPattern) origins.push(llmOriginPattern);
   if (DETACHED && tab?.url) origins.push(originPattern(tab.url));
+  if (!origins.length) return true;
+  if (DETACHED) {
+    // The detached window can't show a permission prompt (Firefox), so just verify
+    // the origins are already granted (pre-granted via Options + the detach button).
+    return chrome.permissions.contains({ origins });
+  }
   return ensureOrigins(origins);
 }
 
@@ -143,6 +149,12 @@ function hideScrub() {
   $("scrubctl").classList.add("hidden");
 }
 
+// Only follow new content if the user is already near the bottom; if they've
+// scrolled up to read earlier output, don't yank them down while it streams.
+function stickToBottom() {
+  if (log.scrollHeight - log.scrollTop - log.clientHeight < 60) log.scrollTop = log.scrollHeight;
+}
+
 function addTurn(q) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
@@ -155,7 +167,7 @@ function addTurn(q) {
   aEl.textContent = "";
   wrap.append(qEl, aEl);
   log.append(wrap);
-  log.scrollTop = log.scrollHeight;
+  stickToBottom();
   return aEl;
 }
 
@@ -190,11 +202,25 @@ function onMessage(msg) {
     case "ANSWER_START":
       setStatus("Generating…");
       break;
+    case "ANSWER_RESUME":
+      // Reattached to an answer that was streaming when the popup closed/reopened.
+      activeAnswerEl = addTurn(msg.prompt);
+      activeRaw = msg.full || "";
+      activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+      stickToBottom();
+      $("exportqa").classList.remove("hidden");
+      if (msg.terminated) {
+        setStatus("Answer was interrupted when the popup closed. Partial shown — re-ask to continue.");
+        activeAnswerEl = null; // no more TOKENs coming
+      } else {
+        setStatus("Generating…"); // the SW is still streaming — TOKENs will follow
+      }
+      break;
     case "TOKEN":
       if (activeAnswerEl) {
         activeRaw += msg.text;
         activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
-        log.scrollTop = log.scrollHeight;
+        stickToBottom();
       }
       break;
     case "USAGE": {
@@ -210,6 +236,7 @@ function onMessage(msg) {
     case "DONE":
       askBtn.disabled = false;
       activeAnswerEl = null;
+      $("exportqa").classList.remove("hidden"); // there's now a Q&A to export
       break;
     case "TX_PROGRESS":
       showScrub(`${msg.resumed ? "Resuming" : "Loading"} transcript… ${msg.pct}% (${msg.count} lines)`);
@@ -296,13 +323,19 @@ async function ask() {
   const tab = await getTargetTab();
   // Ask for host access before doing anything that would lose the typed question.
   if (!(await ensureAccess(tab, true))) {
-    setStatus("Site access is required (your AI endpoint" + (DETACHED ? " and the video site" : "") + "). Click Ask to grant it.", true);
+    setStatus(
+      DETACHED
+        ? "Site access is required. Right-click the PAL toolbar icon and choose 'Always Allow on [this site]', then retry."
+        : "Site access is required (your AI endpoint). Click Ask to grant it.",
+      true
+    );
     return;
   }
   promptEl.value = "";
   chrome.storage.session.remove(draftKey); // submitted — clear the saved draft
   askBtn.disabled = true;
   activeAnswerEl = addTurn(prompt);
+  $("exportqa").classList.remove("hidden"); // a Q&A is now in progress — show export immediately
   activeRaw = "";
   setStatus("Working…");
   send({ type: "ASK", prompt, tabId: tab?.id, windowId: tab?.windowId });
@@ -365,6 +398,72 @@ document.addEventListener("click", (e) => {
   pastePop.classList.add("hidden");
 });
 
+// --- Export Q&A as Markdown ---
+// Gathers this tab's questions/answers plus the video's title (from the page, when
+// available) into a .md file the user can save as a note. Title falls back to a
+// short derivation from the first question when the page exposes none.
+async function exportQA() {
+  const tab = await getTargetTab();
+  if (!tab) { setStatus("No active tab to export from.", true); return; }
+  const key = `vt_hist_${tab.id}`;
+  const hist = (await chrome.storage.session.get(key))[key] || [];
+  if (!hist.length) { setStatus("No questions to export yet.", true); return; }
+  // Best-effort site access so we can read the video title (Chrome prompts for it
+  // from the detached window). Firefox doesn't surface a prompt here, so the title
+  // probe below just falls back to a derived title — the export never blocks on it.
+  await ensureAccess(tab, false);
+
+  // Video title: og:title -> document.title; else summarize from the first question.
+  let title = "";
+  try {
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () =>
+        (document.querySelector('meta[property="og:title"]')?.content || document.title || "").trim(),
+    });
+    title = (r?.result || "").trim();
+  } catch {}
+  if (!title) {
+    const q = (hist[0].q || "").trim();
+    title = (q.slice(0, 80) + (q.length > 80 ? "…" : "")) || "PAL Q&A";
+  }
+
+  const url = tab.url || "";
+  let host = "";
+  try { host = new URL(url).hostname; } catch {}
+  const md = buildMarkdown({ title, url, host, when: new Date().toLocaleString(), hist });
+  downloadText(md, "PAL - " + sanitizeName(title).slice(0, 60) + ".md");
+  setStatus(`Exported ${hist.length} Q&A as Markdown.`);
+}
+
+function buildMarkdown({ title, url, host, when, hist }) {
+  const L = [`# ${title}`, ""];
+  if (url) L.push(`**Source:** ${url}`);
+  if (host) L.push(`**Site:** ${host}`);
+  L.push(`**Exported:** ${when}`, "", "---", "");
+  hist.forEach((t, i) => {
+    L.push(`## Q${i + 1}: ${(t.q || "").trim()}`, "", (t.a || "").trim(), "");
+  });
+  return L.join("\n").trim() + "\n";
+}
+
+function sanitizeName(s) {
+  return (s || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Q&A";
+}
+
+function downloadText(text, filename) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+$("exportqa").addEventListener("click", exportQA);
+
 $("scrub-yes").addEventListener("click", () => {
   $("scrubconfirm").classList.add("hidden");
   askBtn.disabled = true;
@@ -381,6 +480,14 @@ $("cancelscrub").addEventListener("click", () => {
 });
 const DETACHED_WIN_KEY = "vt_detached_win";
 $("detach").addEventListener("click", async () => {
+  // The detached window can't prompt for host access (Firefox doesn't surface
+  // permissions.request from a windows.create popup) and Firefox won't grant a
+  // wildcard, so grant the LLM endpoint + the current video site's host NOW from
+  // this action popup (which CAN prompt for specific hosts). The detached window
+  // inherits the grant.
+  const tab = await getTargetTab();
+  const origins = [llmOriginPattern, tab?.url && originPattern(tab.url)].filter(Boolean);
+  if (origins.length) await ensureOrigins(origins);
   const url = chrome.runtime.getURL("src/popup.html") + "?window=1";
   // Single instance: if our detached window still exists, focus it instead of
   // opening another. We match by stored window id because matching by tab.url
@@ -436,6 +543,7 @@ $("passphrase").addEventListener("keydown", (e) => {
       const aEl = addTurn(t.q);
       aEl.innerHTML = renderMarkdown(t.a);
     }
+    $("exportqa").classList.toggle("hidden", hist.length === 0);
     // Restore an unsent draft for this tab.
     if (store[draftKey]) promptEl.value = store[draftKey];
   }
@@ -452,4 +560,6 @@ $("passphrase").addEventListener("keydown", (e) => {
   // Show the running token total immediately.
   renderTokens((await chrome.storage.local.get("vt_usage")).vt_usage);
   send({ type: "GET_STATE" });
+  // Reattach to an answer that was streaming when the popup closed/reopened.
+  if (tab?.id != null) send({ type: "RESUME_ASK", tabId: tab.id });
 })();

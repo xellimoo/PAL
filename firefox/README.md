@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.6.0**.
+Current version: **0.7.3**.
 
 ## What it does
 
@@ -364,6 +364,25 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   from one shared MV3 codebase (separate manifests in `chrome/` and `firefox/`).
   Same features — BYOK provider profiles, YouTube + paste transcript, unlock cache,
   etc.
+- **0.7.0** — **Export Q&A as Markdown**: a new button in the popup header exports
+  the current tab's questions and answers to a `.md` file — with the video title
+  (read from the page, else derived from the first question), the source URL, and an
+  export timestamp — for saving as notes.
+- **0.7.1** — Toolbar icons replaced with consistent, base-aligned inline SVGs; the
+  export button now appears the moment a question is asked; and the view no longer
+  auto-scrolls to the bottom while a reply streams if you've scrolled up to read
+  earlier output.
+- **0.7.2** — Fix detached-window host access on Firefox: the detach button now
+  grants the specific video site + your AI endpoint (Firefox won't grant a
+  wildcard), and the detached window checks rather than requests access (it can't
+  show a permission prompt). Export also no longer blocks when the video title
+  can't be read — it falls back to a derived title.
+- **0.7.3** — Answers survive popup close: the service worker tracks in-flight
+  answers per tab so a reopened popup reattaches to the stream (live) or recovers
+  the partial from session storage (if the worker was recycled). The question is
+  persisted immediately on Ask — before the slow setup — so closing the popup
+  right after asking no longer loses it. Firefox detached-window error message now
+  guides users to right-click the icon → "Always Allow on [site]".
 
 ## Disclaimer
 
