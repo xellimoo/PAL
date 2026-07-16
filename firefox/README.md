@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.7.3**.
+Current version: **0.8.0**.
 
 ## What it does
 
@@ -383,6 +383,12 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   persisted immediately on Ask — before the slow setup — so closing the popup
   right after asking no longer loses it. Firefox detached-window error message now
   guides users to right-click the icon → "Always Allow on [site]".
+- **0.8.0** — **Attach images to questions**: paste a screenshot or web image
+  (Ctrl+V), drag-and-drop a file, or use the paperclip button (detached window).
+  Images are sent alongside the screenshot so the model sees both. Auto-resized to
+  ≤1568px JPEG. A thumbnail shows under the question in the chat. Adapters updated
+  to support multiple images per turn (OpenAI / Anthropic / Gemini). Browser-aware
+  placeholder hints (drag in Chrome, paste in Firefox).
 
 ## Disclaimer
 

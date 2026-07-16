@@ -132,7 +132,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImageB64);
       return;
     }
 
@@ -243,7 +243,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port) {
+async function runAsk(prompt, tabId, port, userImageB64) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -545,7 +545,7 @@ async function runAsk(prompt, tabId, port) {
       model: settings.model,
       system,
       user,
-      imageB64,
+      images: [imageB64, userImageB64].filter(Boolean),
       maxTokens: settings.maxTokens ?? 65536,
       history,
     });
@@ -558,7 +558,7 @@ async function runAsk(prompt, tabId, port) {
         : mode === "full"
         ? "full transcript"
         : "windowed transcript + outline";
-    const imageLabel = imageB64 ? " + screenshot" : imageNote ? ` + no screenshot (${imageNote})` : "";
+    const imageLabel = (imageB64 ? " + screenshot" : imageNote ? ` + no screenshot (${imageNote})` : "") + (userImageB64 ? " + attached image" : "");
     const ctxNote = `on ${host} • ${transcriptLabel}${imageLabel} • ~${tokenEstimate.toLocaleString()} ctx tokens`;
     port.postMessage({ type: "STATUS", text: `Asking ${settings.model} (${ctxNote})…` });
 

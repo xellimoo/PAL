@@ -15,6 +15,7 @@ const DETACHED = new URLSearchParams(location.search).has("window");
 let port = chrome.runtime.connect({ name: "vt" });
 let activeAnswerEl = null;
 let activeRaw = ""; // accumulated markdown for the in-flight answer
+let attachedImageB64 = null; // user-attached image (base64 JPEG), cleared after each Ask
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
 let llmOriginPattern = null; // cached from settings, for runtime host permission
 
@@ -155,17 +156,25 @@ function stickToBottom() {
   if (log.scrollHeight - log.scrollTop - log.clientHeight < 60) log.scrollTop = log.scrollHeight;
 }
 
-function addTurn(q) {
+function addTurn(q, imgSrc) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
   wrap.className = "turn";
   const qEl = document.createElement("div");
   qEl.className = "q";
   qEl.textContent = q;
+  wrap.append(qEl);
+  if (imgSrc) {
+    const thumb = document.createElement("img");
+    thumb.src = imgSrc;
+    thumb.className = "q-thumb";
+    thumb.alt = "Attached image";
+    wrap.append(thumb);
+  }
   const aEl = document.createElement("div");
   aEl.className = "a";
   aEl.textContent = "";
-  wrap.append(qEl, aEl);
+  wrap.append(aEl);
   log.append(wrap);
   stickToBottom();
   return aEl;
@@ -334,11 +343,16 @@ async function ask() {
   promptEl.value = "";
   chrome.storage.session.remove(draftKey); // submitted — clear the saved draft
   askBtn.disabled = true;
-  activeAnswerEl = addTurn(prompt);
+  activeAnswerEl = addTurn(prompt, attachedImageB64 ? attachThumb.src : null);
+  log.scrollTop = log.scrollHeight; // user just asked — force to bottom so the answer is visible
   $("exportqa").classList.remove("hidden"); // a Q&A is now in progress — show export immediately
   activeRaw = "";
   setStatus("Working…");
-  send({ type: "ASK", prompt, tabId: tab?.id, windowId: tab?.windowId });
+  send({ type: "ASK", prompt, tabId: tab?.id, userImageB64: attachedImageB64, windowId: tab?.windowId });
+  // Clear the attached image (consumed by this question — the chat thumbnail keeps its blob URL)
+  attachedImageB64 = null;
+  attachThumb.src = "";
+  attachPreview.classList.add("hidden");
 }
 
 askBtn.addEventListener("click", ask);
@@ -348,6 +362,7 @@ promptEl.addEventListener("keydown", (e) => {
     ask();
   }
 });
+
 // Persist the draft as the user types, so closing the popup doesn't lose it.
 promptEl.addEventListener("input", () => {
   chrome.storage.session.set({ [draftKey]: promptEl.value });
@@ -521,11 +536,88 @@ $("passphrase").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("unlock-btn").click();
 });
 
+// --- Attach image (file select or paste) ---
+const attachPreview = $("attach-preview");
+const attachThumb = $("attach-thumb");
+
+// Read an image File, resize to <=1568px, re-encode as JPEG base64 (same pipeline
+// as the SW's captureAndCrop — keeps the adapter's hardcoded image/jpeg consistent).
+async function fileToJpegBase64(file, maxDim = 1568) {
+  const bitmap = await createImageBitmap(file);
+  let { width, height } = bitmap;
+  if (width > maxDim || height > maxDim) {
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = new OffscreenCanvas(width, height);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let s = "";
+  for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+  return btoa(s);
+}
+
+async function attachImage(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  try {
+    setStatus("Processing image…");
+    attachedImageB64 = await fileToJpegBase64(file);
+    attachThumb.src = URL.createObjectURL(file);
+    attachPreview.classList.remove("hidden");
+    setStatus("");
+  } catch (e) {
+    setStatus("Couldn't process that image.", true);
+  }
+}
+
+$("attach").addEventListener("click", () => $("file-input").click());
+$("file-input").addEventListener("change", () => {
+  const file = $("file-input").files?.[0];
+  if (file) attachImage(file);
+  $("file-input").value = ""; // allow re-selecting the same file
+});
+$("attach-remove").addEventListener("click", () => {
+  attachedImageB64 = null;
+  attachThumb.src = "";
+  attachPreview.classList.add("hidden");
+});
+// Paste an image — works for screenshots, web-copied images (all browsers), and
+// OS-copied files (Firefox). Chrome doesn't put image data in the clipboard for
+// OS-copied files (only the file path as text) — drag-and-drop works there instead.
+document.addEventListener("paste", (e) => {
+  const cd = e.clipboardData;
+  if (!cd) return;
+  for (let i = 0; i < cd.items.length; i++) {
+    if (cd.items[i].type.startsWith("image/")) {
+      const file = cd.items[i].getAsFile();
+      if (file) { e.preventDefault(); attachImage(file); return; }
+    }
+  }
+});
+// Drag-and-drop an image file onto the popup (the native file picker closes the
+// attached popup by stealing focus; drag-drop doesn't).
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer?.files?.[0];
+  if (file && file.type.startsWith("image/")) attachImage(file);
+});
+
 // Restore this tab's prior turns (survives popup close) and probe state.
 (async function init() {
   if (DETACHED) {
     document.body.classList.add("windowed");
     $("detach").classList.add("hidden");
+  } else {
+    // The native file picker closes the attached popup; hide the button there.
+    // Users paste (Ctrl+V) or drag-drop instead.
+    $("attach").classList.add("hidden");
+    const isFirefox = chrome.runtime.getURL("").startsWith("moz-");
+    promptEl.placeholder = isFirefox
+      ? "Ask about what's on screen…  (paste an image here to attach)"
+      : "Ask about what's on screen…  (drag an image here to attach)";
   }
   const tab = await getTargetTab();
   if (tab && /youtube\.com\/(watch|embed)|youtu\.be\//.test(tab.url || "")) {

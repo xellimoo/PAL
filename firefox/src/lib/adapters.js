@@ -18,16 +18,13 @@ function trimSlash(u) {
 // Build {url, headers, body} for a streaming chat request.
 // `history` is prior turns as [{ role: "user"|"assistant", text }], oldest first,
 // carried as text only (no stale screenshots). Only the current turn gets the image.
-export function buildRequest({ spec, baseUrl, apiKey, model, system, user, imageB64, maxTokens, history = [] }) {
+export function buildRequest({ spec, baseUrl, apiKey, model, system, user, images = [], maxTokens, history = [] }) {
   const base = trimSlash(baseUrl);
 
   if (spec === "anthropic") {
     const content = [{ type: "text", text: user }];
-    if (imageB64) {
-      content.push({
-        type: "image",
-        source: { type: "base64", media_type: "image/jpeg", data: imageB64 },
-      });
+    for (const img of images) {
+      content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } });
     }
     return {
       url: base.endsWith("/messages") ? base : `${base}/messages`,
@@ -57,7 +54,7 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
 
   if (spec === "gemini") {
     const parts = [{ text: user }];
-    if (imageB64) parts.push({ inlineData: { mimeType: "image/jpeg", data: imageB64 } });
+    for (const img of images) parts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
     // key goes in the query string for the native Gemini endpoint
     const root = base.endsWith("/v1beta") || base.endsWith("/v1") ? base : base;
     return {
@@ -77,10 +74,10 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
   }
 
   // default: openai-compatible
-  const userContent = imageB64
+  const userContent = images.length
     ? [
         { type: "text", text: user },
-        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageB64}` } },
+        ...images.map((img) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${img}` } })),
       ]
     : user;
   return {
