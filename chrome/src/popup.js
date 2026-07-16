@@ -166,7 +166,7 @@ function addTurn(q, imgUrls) {
   qEl.className = "q";
   qEl.textContent = q;
   wrap.append(qEl);
-  const urls = Array.isArray(imgUrls) ? imgUrls : (imgSrc ? [imgSrc] : []);
+  const urls = Array.isArray(imgUrls) ? imgUrls : [];
   if (urls.length) {
     const thumbs = document.createElement("div");
     thumbs.className = "q-thumbs";
@@ -342,7 +342,7 @@ async function ask() {
   if (!(await ensureAccess(tab, true))) {
     setStatus(
       DETACHED
-        ? "Site access is required. Right-click the PAL toolbar icon and choose 'Always Allow on [this site]', then retry."
+        ? "Site access is required. Right-click the PAL browser icon and choose 'Always Allow on [this site]', then retry."
         : "Site access is required (your AI endpoint). Click Ask to grant it.",
       true
     );
@@ -541,6 +541,20 @@ $("unlock-btn").addEventListener("click", () => {
 $("passphrase").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("unlock-btn").click();
 });
+$("resetchat").addEventListener("click", async () => {
+  if (!confirm("Reset conversation? This clears all Q&A for this tab.")) return;
+  const tab = await getTargetTab();
+  if (tab) {
+    await chrome.storage.session.remove(`vt_hist_${tab.id}`);
+  }
+  log.innerHTML = "";
+  const e = document.createElement("div");
+  e.className = "empty";
+  e.textContent = "Conversation reset. Ask a new question.";
+  log.append(e);
+  setStatus("Conversation reset.");
+  $("exportqa").classList.add("hidden");
+});
 
 // --- Attach image (file select or paste) ---
 
@@ -584,6 +598,12 @@ function renderAttachChips() {
     chip.append(img, rm);
     attachPreview.append(chip);
   });
+  if (attachedImages.length) {
+    const hint = document.createElement("span");
+    hint.className = "attach-hint";
+    hint.textContent = `(up to ${MAX_ATTACHMENTS}…)`;
+    attachPreview.append(hint);
+  }
   attachPreview.classList.toggle("hidden", attachedImages.length === 0);
 }
 

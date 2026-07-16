@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.4**.
+Current version: **0.8.5**.
 
 ## What it does
 
@@ -399,6 +399,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.4** — Support up to 3 images per question (file picker, paste, drag-drop).
   Multiple thumbnails shown horizontally above the input and under each question in
   chat history. `MAX_ATTACHMENTS` constant (3) ready for future txt/md support.
+- **0.8.5** — Reset conversation button on the toolbar (clears Q&A for the tab,
+  keeps transcript cache). Image limit hint "(up to 3…)" next to thumbnails. Fixed
+  stale `imgSrc` reference that broke Ask when no image was attached.
 
 ## Disclaimer
 
