@@ -17,6 +17,7 @@ let activeAnswerEl = null;
 let activeRaw = ""; // accumulated markdown for the in-flight answer
 let attachedImageB64 = null; // user-attached image (base64 JPEG), cleared after each Ask
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
+let attachKey = "vt_attach_global"; // per-tab key for the unsent attached image
 let llmOriginPattern = null; // cached from settings, for runtime host permission
 
 // Least-privilege: instead of a broad install-time host permission, request access
@@ -349,10 +350,7 @@ async function ask() {
   activeRaw = "";
   setStatus("Working…");
   send({ type: "ASK", prompt, tabId: tab?.id, userImageB64: attachedImageB64, windowId: tab?.windowId });
-  // Clear the attached image (consumed by this question — the chat thumbnail keeps its blob URL)
-  attachedImageB64 = null;
-  attachThumb.src = "";
-  attachPreview.classList.add("hidden");
+  clearAttachedImage(); // consumed by this question
 }
 
 askBtn.addEventListener("click", ask);
@@ -564,12 +562,20 @@ async function attachImage(file) {
   try {
     setStatus("Processing image…");
     attachedImageB64 = await fileToJpegBase64(file);
-    attachThumb.src = URL.createObjectURL(file);
+    attachThumb.src = `data:image/jpeg;base64,${attachedImageB64}`;
     attachPreview.classList.remove("hidden");
+    chrome.storage.session.set({ [attachKey]: attachedImageB64 }); // survive popup close
     setStatus("");
   } catch (e) {
     setStatus("Couldn't process that image.", true);
   }
+}
+
+function clearAttachedImage() {
+  attachedImageB64 = null;
+  attachThumb.src = "";
+  attachPreview.classList.add("hidden");
+  chrome.storage.session.remove(attachKey);
 }
 
 $("attach").addEventListener("click", () => $("file-input").click());
@@ -578,11 +584,7 @@ $("file-input").addEventListener("change", () => {
   if (file) attachImage(file);
   $("file-input").value = ""; // allow re-selecting the same file
 });
-$("attach-remove").addEventListener("click", () => {
-  attachedImageB64 = null;
-  attachThumb.src = "";
-  attachPreview.classList.add("hidden");
-});
+$("attach-remove").addEventListener("click", clearAttachedImage);
 // Paste an image — works for screenshots, web-copied images (all browsers), and
 // OS-copied files (Firefox). Chrome doesn't put image data in the clipboard for
 // OS-copied files (only the file path as text) — drag-and-drop works there instead.
@@ -628,8 +630,9 @@ document.addEventListener("drop", (e) => {
   }
   if (tab) {
     draftKey = `vt_draft_${tab.id}`;
+    attachKey = `vt_attach_${tab.id}`;
     const key = `vt_hist_${tab.id}`;
-    const store = await chrome.storage.session.get([key, draftKey]);
+    const store = await chrome.storage.session.get([key, draftKey, attachKey]);
     const hist = store[key] || [];
     for (const t of hist) {
       const aEl = addTurn(t.q);
@@ -638,6 +641,12 @@ document.addEventListener("drop", (e) => {
     $("exportqa").classList.toggle("hidden", hist.length === 0);
     // Restore an unsent draft for this tab.
     if (store[draftKey]) promptEl.value = store[draftKey];
+    // Restore an unsent attached image.
+    if (store[attachKey]) {
+      attachedImageB64 = store[attachKey];
+      attachThumb.src = `data:image/jpeg;base64,${attachedImageB64}`;
+      attachPreview.classList.remove("hidden");
+    }
   }
   promptEl.focus();
   if (!log.children.length) {

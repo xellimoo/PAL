@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.0**.
+Current version: **0.8.1**.
 
 ## What it does
 
@@ -389,6 +389,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   ≤1568px JPEG. A thumbnail shows under the question in the chat. Adapters updated
   to support multiple images per turn (OpenAI / Anthropic / Gemini). Browser-aware
   placeholder hints (drag in Chrome, paste in Firefox).
+- **0.8.1** — Attached images survive popup close: the image is persisted to session
+  storage (like the text draft) and restored with its thumbnail on reopen.
 
 ## Disclaimer
 
