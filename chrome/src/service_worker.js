@@ -132,7 +132,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port, msg.userImageB64);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImages);
       return;
     }
 
@@ -142,10 +142,10 @@ async function handleMessage(msg, port) {
       const ask = activeAsks.get(msg.tabId);
       if (ask) {
         ask.port = port;
-        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full, ...(ask.img ? { img: ask.img } : {}) });
+        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full, ...((ask.imgs ? { imgs: ask.imgs } : {})) });
       } else {
         const prog = (await chrome.storage.session.get(`vt_prog_${msg.tabId}`))[`vt_prog_${msg.tabId}`];
-        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true, ...(prog.img ? { img: prog.img } : {}) });
+        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true, ...((prog.imgs ? { imgs: prog.imgs } : {})) });
       }
       return;
     }
@@ -243,7 +243,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port, userImageB64) {
+async function runAsk(prompt, tabId, port, userImages) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -277,10 +277,10 @@ async function runAsk(prompt, tabId, port, userImageB64) {
     // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
     // setup — so a popup that closed right after Ask and reopens during setup can
     // reattach (RESUME_ASK finds the entry) and the question survives SW termination.
-    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, ...(userImageB64 ? { img: userImageB64 } : {}) };
+    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, ...((userImages?.length) ? { imgs: userImages } : {}) };
     activeAsks.set(tab.id, ask);
     const progKey = `vt_prog_${tab.id}`;
-    chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ...(userImageB64 ? { img: userImageB64 } : {}) } }).catch(() => {});
+    chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
@@ -545,7 +545,7 @@ async function runAsk(prompt, tabId, port, userImageB64) {
       model: settings.model,
       system,
       user,
-      images: [imageB64, userImageB64].filter(Boolean),
+      images: [imageB64, ...(userImages || [])].filter(Boolean),
       maxTokens: settings.maxTokens ?? 65536,
       history,
     });
@@ -558,7 +558,7 @@ async function runAsk(prompt, tabId, port, userImageB64) {
         : mode === "full"
         ? "full transcript"
         : "windowed transcript + outline";
-    const imageLabel = (imageB64 ? " + screenshot" : imageNote ? ` + no screenshot (${imageNote})` : "") + (userImageB64 ? " + attached image" : "");
+    const imageLabel = (imageB64 ? " + screenshot" : imageNote ? ` + no screenshot (${imageNote})` : "") + ((userImages?.length) ? " + " + userImages.length + " image" + (userImages.length > 1 ? "s" : "") : "");
     const ctxNote = `on ${host} • ${transcriptLabel}${imageLabel} • ~${tokenEstimate.toLocaleString()} ctx tokens`;
     port.postMessage({ type: "STATUS", text: `Asking ${settings.model} (${ctxNote})…` });
 
@@ -581,11 +581,11 @@ async function runAsk(prompt, tabId, port, userImageB64) {
       safePost(ask.port, { type: "TOKEN", text: chunk });
       if (ask.full.length - ask.saved >= 200) {
         ask.saved = ask.full.length;
-        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ...(userImageB64 ? { img: userImageB64 } : {}) } }).catch(() => {});
+        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
       }
     }
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(tab.id, prompt, ask.full, userImageB64);
+    await appendHistory(tab.id, prompt, ask.full, userImages?.length ? userImages : undefined);
     activeAsks.delete(tab.id);
     chrome.storage.session.remove(progKey).catch(() => {});
 
@@ -953,10 +953,10 @@ async function getHistory(tabId) {
   return store[key] || [];
 }
 
-async function appendHistory(tabId, q, a, img) {
+async function appendHistory(tabId, q, a, imgs) {
   const key = `vt_hist_${tabId}`;
   const arr = await getHistory(tabId);
-  arr.push({ q, a, t: Date.now(), ...(img ? { img } : {}) });
+  arr.push({ q, a, t: Date.now(), ...(imgs?.length ? { imgs } : {}) });
   await chrome.storage.session.set({ [key]: arr.slice(-20) });
 }
 

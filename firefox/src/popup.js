@@ -15,9 +15,10 @@ const DETACHED = new URLSearchParams(location.search).has("window");
 let port = chrome.runtime.connect({ name: "vt" });
 let activeAnswerEl = null;
 let activeRaw = ""; // accumulated markdown for the in-flight answer
-let attachedImageB64 = null; // user-attached image (base64 JPEG), cleared after each Ask
+const MAX_ATTACHMENTS = 3; // images now; will also cap txt/md when added
+let attachedImages = []; // [{ b64, url }] — user-attached images, cleared after each Ask
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
-let attachKey = "vt_attach_global"; // per-tab key for the unsent attached image
+let attachKey = "vt_attach_global"; // per-tab key for the unsent attached images
 let llmOriginPattern = null; // cached from settings, for runtime host permission
 
 // Least-privilege: instead of a broad install-time host permission, request access
@@ -157,7 +158,7 @@ function stickToBottom() {
   if (log.scrollHeight - log.scrollTop - log.clientHeight < 60) log.scrollTop = log.scrollHeight;
 }
 
-function addTurn(q, imgSrc) {
+function addTurn(q, imgUrls) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
   wrap.className = "turn";
@@ -165,12 +166,18 @@ function addTurn(q, imgSrc) {
   qEl.className = "q";
   qEl.textContent = q;
   wrap.append(qEl);
-  if (imgSrc) {
-    const thumb = document.createElement("img");
-    thumb.src = imgSrc;
-    thumb.className = "q-thumb";
-    thumb.alt = "Attached image";
-    wrap.append(thumb);
+  const urls = Array.isArray(imgUrls) ? imgUrls : (imgSrc ? [imgSrc] : []);
+  if (urls.length) {
+    const thumbs = document.createElement("div");
+    thumbs.className = "q-thumbs";
+    for (const u of urls) {
+      const img = document.createElement("img");
+      img.src = u;
+      img.className = "q-thumb";
+      img.alt = "Attached image";
+      thumbs.append(img);
+    }
+    wrap.append(thumbs);
   }
   const aEl = document.createElement("div");
   aEl.className = "a";
@@ -214,7 +221,7 @@ function onMessage(msg) {
       break;
     case "ANSWER_RESUME":
       // Reattached to an answer that was streaming when the popup closed/reopened.
-      activeAnswerEl = addTurn(msg.prompt, msg.img ? `data:image/jpeg;base64,${msg.img}` : null);
+      activeAnswerEl = addTurn(msg.prompt, msg.imgs ? msg.imgs.map((b) => `data:image/jpeg;base64,${b}`) : null);
       activeRaw = msg.full || "";
       activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
       stickToBottom();
@@ -344,13 +351,14 @@ async function ask() {
   promptEl.value = "";
   chrome.storage.session.remove(draftKey); // submitted — clear the saved draft
   askBtn.disabled = true;
-  activeAnswerEl = addTurn(prompt, attachedImageB64 ? attachThumb.src : null);
+  const imgUrls = attachedImages.map((a) => a.url);
+  activeAnswerEl = addTurn(prompt, imgUrls.length ? imgUrls : null);
   log.scrollTop = log.scrollHeight; // user just asked — force to bottom so the answer is visible
   $("exportqa").classList.remove("hidden"); // a Q&A is now in progress — show export immediately
   activeRaw = "";
   setStatus("Working…");
-  send({ type: "ASK", prompt, tabId: tab?.id, userImageB64: attachedImageB64, windowId: tab?.windowId });
-  clearAttachedImage(); // consumed by this question
+  send({ type: "ASK", prompt, tabId: tab?.id, userImages: attachedImages.map((a) => a.b64), windowId: tab?.windowId });
+  clearAttachments(); // consumed by this question
 }
 
 askBtn.addEventListener("click", ask);
@@ -535,8 +543,6 @@ $("passphrase").addEventListener("keydown", (e) => {
 });
 
 // --- Attach image (file select or paste) ---
-const attachPreview = $("attach-preview");
-const attachThumb = $("attach-thumb");
 
 // Read an image File, resize to <=1568px, re-encode as JPEG base64 (same pipeline
 // as the SW's captureAndCrop — keeps the adapter's hardcoded image/jpeg consistent).
@@ -560,34 +566,68 @@ async function fileToJpegBase64(file, maxDim = 1568) {
   return btoa(s);
 }
 
-async function attachImage(file) {
+const attachPreview = $("attach-preview");
+
+function renderAttachChips() {
+  attachPreview.innerHTML = "";
+  attachedImages.forEach((a, i) => {
+    const chip = document.createElement("div");
+    chip.className = "attach-chip";
+    const img = document.createElement("img");
+    img.src = a.url;
+    img.alt = "Attached image";
+    const rm = document.createElement("button");
+    rm.className = "chip-remove";
+    rm.title = "Remove";
+    rm.textContent = "✕";
+    rm.onclick = () => { URL.revokeObjectURL(a.url); attachedImages.splice(i, 1); saveAndRender(); };
+    chip.append(img, rm);
+    attachPreview.append(chip);
+  });
+  attachPreview.classList.toggle("hidden", attachedImages.length === 0);
+}
+
+function saveAndRender() {
+  renderAttachChips();
+  if (attachedImages.length) {
+    chrome.storage.session.set({ [attachKey]: attachedImages.map((a) => a.b64) });
+  } else {
+    chrome.storage.session.remove(attachKey);
+  }
+}
+
+async function addAttachment(file) {
   if (!file || !file.type.startsWith("image/")) return;
+  if (attachedImages.length >= MAX_ATTACHMENTS) {
+    setStatus("Max " + MAX_ATTACHMENTS + " images per question.", true);
+    return;
+  }
   try {
     setStatus("Processing image…");
-    attachedImageB64 = await fileToJpegBase64(file);
-    attachThumb.src = URL.createObjectURL(file); // original — preserves transparency
-    attachPreview.classList.remove("hidden");
-    chrome.storage.session.set({ [attachKey]: attachedImageB64 }); // survive popup close
+    const b64 = await fileToJpegBase64(file);
+    attachedImages.push({ b64, url: URL.createObjectURL(file) });
+    saveAndRender();
     setStatus("");
   } catch (e) {
     setStatus("Couldn't process that image.", true);
   }
 }
 
-function clearAttachedImage() {
-  attachedImageB64 = null;
-  attachThumb.src = "";
-  attachPreview.classList.add("hidden");
-  chrome.storage.session.remove(attachKey);
+function clearAttachments() {
+  attachedImages.forEach((a) => URL.revokeObjectURL(a.url));
+  attachedImages = [];
+  saveAndRender();
 }
 
 $("attach").addEventListener("click", () => $("file-input").click());
-$("file-input").addEventListener("change", () => {
-  const file = $("file-input").files?.[0];
-  if (file) attachImage(file);
-  $("file-input").value = ""; // allow re-selecting the same file
+$("file-input").addEventListener("change", async () => {
+  const files = [...($("file-input").files || [])].filter((f) => f.type.startsWith("image/"));
+  for (const f of files) {
+    if (attachedImages.length >= MAX_ATTACHMENTS) break;
+    await addAttachment(f);
+  }
+  $("file-input").value = "";
 });
-$("attach-remove").addEventListener("click", clearAttachedImage);
 // Paste an image — works for screenshots, web-copied images (all browsers), and
 // OS-copied files (Firefox). Chrome doesn't put image data in the clipboard for
 // OS-copied files (only the file path as text) — drag-and-drop works there instead.
@@ -597,17 +637,19 @@ document.addEventListener("paste", (e) => {
   for (let i = 0; i < cd.items.length; i++) {
     if (cd.items[i].type.startsWith("image/")) {
       const file = cd.items[i].getAsFile();
-      if (file) { e.preventDefault(); attachImage(file); return; }
+      if (file) { e.preventDefault(); addAttachment(file); return; }
     }
   }
 });
-// Drag-and-drop an image file onto the popup (the native file picker closes the
-// attached popup by stealing focus; drag-drop doesn't).
+// Drag-and-drop image files onto the popup.
 document.addEventListener("dragover", (e) => e.preventDefault());
-document.addEventListener("drop", (e) => {
+document.addEventListener("drop", async (e) => {
   e.preventDefault();
-  const file = e.dataTransfer?.files?.[0];
-  if (file && file.type.startsWith("image/")) attachImage(file);
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  for (const f of files) {
+    if (attachedImages.length >= MAX_ATTACHMENTS) break;
+    await addAttachment(f);
+  }
 });
 
 // Restore this tab's prior turns (survives popup close) and probe state.
@@ -638,17 +680,16 @@ document.addEventListener("drop", (e) => {
     const store = await chrome.storage.session.get([key, draftKey, attachKey]);
     const hist = store[key] || [];
     for (const t of hist) {
-      const aEl = addTurn(t.q, t.img ? `data:image/jpeg;base64,${t.img}` : null);
+      const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
       aEl.innerHTML = renderMarkdown(t.a);
     }
     $("exportqa").classList.toggle("hidden", hist.length === 0);
     // Restore an unsent draft for this tab.
     if (store[draftKey]) promptEl.value = store[draftKey];
-    // Restore an unsent attached image.
-    if (store[attachKey]) {
-      attachedImageB64 = store[attachKey];
-      attachThumb.src = `data:image/jpeg;base64,${attachedImageB64}`;
-      attachPreview.classList.remove("hidden");
+    // Restore unsent attached images.
+    if (Array.isArray(store[attachKey]) && store[attachKey].length) {
+      attachedImages = store[attachKey].map((b64) => ({ b64: b64, url: `data:image/jpeg;base64,${b64}` }));
+      renderAttachChips();
     }
   }
   promptEl.focus();
