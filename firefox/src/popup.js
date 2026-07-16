@@ -549,7 +549,10 @@ async function fileToJpegBase64(file, maxDim = 1568) {
     height = Math.round(height * scale);
   }
   const canvas = new OffscreenCanvas(width, height);
-  canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; // white background — JPEG has no alpha, so transparent
+  ctx.fillRect(0, 0, width, height); // pixels would otherwise render as black.
+  ctx.drawImage(bitmap, 0, 0, width, height);
   const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
   const buf = new Uint8Array(await blob.arrayBuffer());
   let s = "";
@@ -562,7 +565,7 @@ async function attachImage(file) {
   try {
     setStatus("Processing image…");
     attachedImageB64 = await fileToJpegBase64(file);
-    attachThumb.src = `data:image/jpeg;base64,${attachedImageB64}`;
+    attachThumb.src = URL.createObjectURL(file); // original — preserves transparency
     attachPreview.classList.remove("hidden");
     chrome.storage.session.set({ [attachKey]: attachedImageB64 }); // survive popup close
     setStatus("");

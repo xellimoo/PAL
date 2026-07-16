@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.1**.
+Current version: **0.8.2**.
 
 ## What it does
 
@@ -399,6 +399,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   placeholder hints (drag in Chrome, paste in Firefox).
 - **0.8.1** — Attached images survive popup close: the image is persisted to session
   storage (like the text draft) and restored with its thumbnail on reopen.
+- **0.8.2** — Transparent images render correctly in the thumbnail (uses the original
+  file, not the JPEG re-encode). The JPEG sent to the model composites onto white.
 
 ## Disclaimer
 
