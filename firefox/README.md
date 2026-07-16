@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.2**.
+Current version: **0.8.3**.
 
 ## What it does
 
@@ -393,6 +393,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   storage (like the text draft) and restored with its thumbnail on reopen.
 - **0.8.2** — Transparent images render correctly in the thumbnail (uses the original
   file, not the JPEG re-encode). The JPEG sent to the model composites onto white.
+- **0.8.3** — Image thumbnails persist in chat history across popup close/reopen
+  (stored in session history alongside the Q&A text, threaded through all reattach
+  and recovery paths).
 
 ## Disclaimer
 

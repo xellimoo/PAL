@@ -214,7 +214,7 @@ function onMessage(msg) {
       break;
     case "ANSWER_RESUME":
       // Reattached to an answer that was streaming when the popup closed/reopened.
-      activeAnswerEl = addTurn(msg.prompt);
+      activeAnswerEl = addTurn(msg.prompt, msg.img ? `data:image/jpeg;base64,${msg.img}` : null);
       activeRaw = msg.full || "";
       activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
       stickToBottom();
@@ -638,7 +638,7 @@ document.addEventListener("drop", (e) => {
     const store = await chrome.storage.session.get([key, draftKey, attachKey]);
     const hist = store[key] || [];
     for (const t of hist) {
-      const aEl = addTurn(t.q);
+      const aEl = addTurn(t.q, t.img ? `data:image/jpeg;base64,${t.img}` : null);
       aEl.innerHTML = renderMarkdown(t.a);
     }
     $("exportqa").classList.toggle("hidden", hist.length === 0);

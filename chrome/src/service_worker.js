@@ -142,10 +142,10 @@ async function handleMessage(msg, port) {
       const ask = activeAsks.get(msg.tabId);
       if (ask) {
         ask.port = port;
-        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full });
+        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full, ...(ask.img ? { img: ask.img } : {}) });
       } else {
         const prog = (await chrome.storage.session.get(`vt_prog_${msg.tabId}`))[`vt_prog_${msg.tabId}`];
-        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true });
+        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true, ...(prog.img ? { img: prog.img } : {}) });
       }
       return;
     }
@@ -277,10 +277,10 @@ async function runAsk(prompt, tabId, port, userImageB64) {
     // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
     // setup — so a popup that closed right after Ask and reopens during setup can
     // reattach (RESUME_ASK finds the entry) and the question survives SW termination.
-    ask = { prompt, full: "", port, tabId: tab.id, saved: 0 };
+    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, ...(userImageB64 ? { img: userImageB64 } : {}) };
     activeAsks.set(tab.id, ask);
     const progKey = `vt_prog_${tab.id}`;
-    chrome.storage.session.set({ [progKey]: { q: prompt, a: "" } }).catch(() => {});
+    chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ...(userImageB64 ? { img: userImageB64 } : {}) } }).catch(() => {});
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
@@ -581,11 +581,11 @@ async function runAsk(prompt, tabId, port, userImageB64) {
       safePost(ask.port, { type: "TOKEN", text: chunk });
       if (ask.full.length - ask.saved >= 200) {
         ask.saved = ask.full.length;
-        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full } }).catch(() => {});
+        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ...(userImageB64 ? { img: userImageB64 } : {}) } }).catch(() => {});
       }
     }
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(tab.id, prompt, ask.full);
+    await appendHistory(tab.id, prompt, ask.full, userImageB64);
     activeAsks.delete(tab.id);
     chrome.storage.session.remove(progKey).catch(() => {});
 
@@ -953,10 +953,10 @@ async function getHistory(tabId) {
   return store[key] || [];
 }
 
-async function appendHistory(tabId, q, a) {
+async function appendHistory(tabId, q, a, img) {
   const key = `vt_hist_${tabId}`;
   const arr = await getHistory(tabId);
-  arr.push({ q, a, t: Date.now() });
+  arr.push({ q, a, t: Date.now(), ...(img ? { img } : {}) });
   await chrome.storage.session.set({ [key]: arr.slice(-20) });
 }
 
