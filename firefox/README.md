@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.8**.
+Current version: **0.8.9**.
 
 ## What it does
 
@@ -414,6 +414,11 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   `<h1>` element first, then `document.title`, then `og:title`. Non-video pages use a
   date-based default filename. Platform suffixes (`- YouTube` etc.) stripped. "PAL - "
   prefix restored.
+- **0.8.9** — CC (caption) state is now reliably restored after the tool finishes
+  using it. All three CC-toggle paths (`ytCaptionWindow`, `ytScrubRange` via
+  `ytRestore`, `ytCaptionsViaPlayer`) use a retry-and-verify loop that clicks until
+  `aria-pressed` matches the original state. `ytCaptionWindow` also wrapped in
+  try/finally so CC is restored even on error.
 
 ## Disclaimer
 

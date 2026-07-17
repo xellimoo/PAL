@@ -1222,8 +1222,11 @@ async function ytCaptionsViaPlayer() {
     XMLHttpRequest.prototype.open = origOpen;
     XMLHttpRequest.prototype.send = origSend;
     try {
-      const nowOn = ccBtn.getAttribute("aria-pressed") === "true";
-      if (nowOn !== ccWasOn) ccBtn.click(); // restore prior CC state
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const nowOn = ccBtn.getAttribute("aria-pressed") === "true";
+        if (nowOn === ccWasOn) break;
+        ccBtn.click();
+      }
     } catch {}
   }
 }
@@ -1304,7 +1307,14 @@ function ytRestore(t, ccWasOn) {
   const v = document.querySelector("video");
   if (v) { try { v.currentTime = t; v.pause(); } catch {} }
   const b = document.querySelector(".ytp-subtitles-button");
-  if (b && !ccWasOn && b.getAttribute("aria-pressed") === "true") b.click();
+  if (b) {
+    // Click + verify — YouTube's button may lag updating aria-pressed.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const nowOn = b.getAttribute("aria-pressed") === "true";
+      if (nowOn === ccWasOn) break;
+      b.click();
+    }
+  }
 }
 
 // Injected into the page: when the caption DOWNLOAD is gated but the player still
@@ -1676,31 +1686,47 @@ async function ytCaptionWindow(windowSec) {
     return [...segs].map((s) => s.textContent || "").join(" ").replace(/\s+/g, " ").trim();
   };
 
+  // Save the user's CC state so we can restore it no matter what.
   const origTime = video.currentTime;
   const ccBtn = document.querySelector(".ytp-subtitles-button");
   const ccWasOn = ccBtn && ccBtn.getAttribute("aria-pressed") === "true";
+  const restoreCC = async () => {
+    try {
+      await seekTo(origTime);
+      video.pause();
+    } catch {}
+    if (ccBtn) {
+      // Click + verify — YouTube's button may lag updating aria-pressed.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const nowOn = ccBtn.getAttribute("aria-pressed") === "true";
+        if (nowOn === ccWasOn) break;
+        ccBtn.click();
+      }
+      await sleep(150);
+    }
+  };
+
   if (ccBtn && !ccWasOn) { ccBtn.click(); await sleep(350); }
 
-  const collected = [];
-  let prev = null;
-  const start = Math.max(0, origTime - windowSec);
-  const end = origTime + windowSec;
-  for (let t = start; t <= end; t += 1.5) {
-    await seekTo(t);
-    await sleep(140); // let the overlay paint for this time
-    const txt = readCaption();
-    if (txt && txt !== prev) { collected.push({ start: Math.round(t * 10) / 10, text: txt }); prev = txt; }
-  }
+  try {
+    const collected = [];
+    let prev = null;
+    const start = Math.max(0, origTime - windowSec);
+    const end = origTime + windowSec;
+    for (let t = start; t <= end; t += 1.5) {
+      await seekTo(t);
+      await sleep(140); // let the overlay paint for this time
+      const txt = readCaption();
+      if (txt && txt !== prev) { collected.push({ start: Math.round(t * 10) / 10, text: txt }); prev = txt; }
+    }
 
-  // restore
-  await seekTo(origTime);
-  try { video.pause(); } catch {}
-  if (ccBtn && !ccWasOn) ccBtn.click(); // turn CC back off if we enabled it
-
-  if (!collected.length) {
-    return { ok: false, reason: "no captions rendered (turn CC on to confirm they exist)" };
+    if (!collected.length) {
+      return { ok: false, reason: "no captions rendered (turn CC on to confirm they exist)" };
+    }
+    return { ok: true, lines: collected };
+  } finally {
+    await restoreCC(); // always restore — even on error
   }
-  return { ok: true, lines: collected };
 }
 
 // ---- Injected into the page (must be fully self-contained) -------------------
