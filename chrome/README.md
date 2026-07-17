@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.7**.
+Current version: **0.8.8**.
 
 ## What it does
 
@@ -417,6 +417,11 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.7** — Fix: delete button on text-file chips was clipped by `overflow: hidden`.
   Filename now wraps in an inner span so the ✕ button is fully visible. Attachment
   chips raised above the footer border via `z-index` + `overflow: visible`.
+- **0.8.8** — Fix: export filename now uses the **current** video's title (YouTube's
+  SPA navigation left `og:title` stale on the first video). Title probe tries YouTube's
+  `<h1>` element first, then `document.title`, then `og:title`. Non-video pages use a
+  date-based default filename. Platform suffixes (`- YouTube` etc.) stripped. "PAL - "
+  prefix restored.
 
 ## Disclaimer
 

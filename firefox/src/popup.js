@@ -435,24 +435,32 @@ async function exportQA() {
   const key = `vt_hist_${tab.id}`;
   const hist = (await chrome.storage.session.get(key))[key] || [];
   if (!hist.length) { setStatus("No questions to export yet.", true); return; }
-  // Best-effort site access so we can read the video title (Chrome prompts for it
-  // from the detached window). Firefox doesn't surface a prompt here, so the title
-  // probe below just falls back to a derived title — the export never blocks on it.
   await ensureAccess(tab, false);
 
-  // Video title: og:title -> document.title; else summarize from the first question.
+  // Video title: read the CURRENT page's title. Try document.title FIRST (YouTube's
+  // SPA navigation updates it but leaves og:title stale on the first video), then
+  // og:title as fallback. Strip platform suffixes for a cleaner filename.
   let title = "";
   try {
     const [r] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () =>
-        (document.querySelector('meta[property="og:title"]')?.content || document.title || "").trim(),
+      func: () => {
+        // YouTube-specific: the h1 title element updates during SPA navigation.
+        const yt = document.querySelector("h1.ytd-watch-metadata title, h1.title.ytd-video-primary-info-renderer");
+        if (yt && yt.textContent.trim()) return yt.textContent.trim();
+        // document.title updates on SPA navigation; og:title does NOT.
+        const dt = (document.title || "").trim();
+        if (dt) return dt;
+        return (document.querySelector('meta[property="og:title"]')?.content || "").trim();
+      },
     });
     title = (r?.result || "").trim();
+    title = title.replace(/\s*[-–—]\s*(YouTube|Netflix|Coursera|Udemy|Khan Academy)\s*$/i, "").trim();
   } catch {}
+  // If no title (non-video page, or access denied), use a date-based default.
   if (!title) {
-    const q = (hist[0].q || "").trim();
-    title = (q.slice(0, 80) + (q.length > 80 ? "…" : "")) || "PAL Q&A";
+    const d = new Date();
+    title = `Q&A ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
   const url = tab.url || "";
