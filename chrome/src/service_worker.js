@@ -132,7 +132,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port, msg.userImages);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts);
       return;
     }
 
@@ -243,7 +243,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port, userImages) {
+async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -534,9 +534,14 @@ async function runAsk(prompt, tabId, port, userImages) {
         "context was available and suggest they ensure a video is the active tab.";
     }
 
-    const user =
+    let user =
       `Current video timestamp: ${fmt(page.currentTime)}.\n` +
       `Question: ${prompt}`;
+    // Prepend any attached text files so the model has the reference material.
+    if (attachedTexts?.length) {
+      const texts = attachedTexts.map((t) => `--- ${t.name} ---\n${t.content}`).join("\n\n");
+      user = `Reference material from attached file(s):\n${texts}\n\n${user}`;
+    }
 
     const req = buildRequest({
       spec: settings.spec || "openai",

@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.5**.
+Current version: **0.8.6**.
 
 ## What it does
 
@@ -402,6 +402,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.5** — Reset conversation button on the toolbar (clears Q&A for the tab,
   keeps transcript cache). Image limit hint "(up to 3…)" next to thumbnails. Fixed
   stale `imgSrc` reference that broke Ask when no image was attached.
+- **0.8.6** — **Attach text files**: the clip button now accepts text-based files (txt,
+  md, csv, json, code, etc.) in addition to images. Text content is prepended to the
+  question as reference material. Shared limit of 3 attachments (images + text combined).
+  Unsupported file types show an error. Drag-and-drop accepts any file type.
 
 ## Disclaimer
 

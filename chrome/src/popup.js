@@ -15,10 +15,10 @@ const DETACHED = new URLSearchParams(location.search).has("window");
 let port = chrome.runtime.connect({ name: "vt" });
 let activeAnswerEl = null;
 let activeRaw = ""; // accumulated markdown for the in-flight answer
-const MAX_ATTACHMENTS = 3; // images now; will also cap txt/md when added
-let attachedImages = []; // [{ b64, url }] — user-attached images, cleared after each Ask
+const MAX_ATTACHMENTS = 3; // cap on total attachments (images + text files) per question
+let attachedFiles = []; // [{ kind:"image", b64, url } | { kind:"text", content, name }]
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
-let attachKey = "vt_attach_global"; // per-tab key for the unsent attached images
+let attachKey = "vt_attach_global"; // per-tab key for the unsent attachments
 let llmOriginPattern = null; // cached from settings, for runtime host permission
 
 // Least-privilege: instead of a broad install-time host permission, request access
@@ -351,13 +351,19 @@ async function ask() {
   promptEl.value = "";
   chrome.storage.session.remove(draftKey); // submitted — clear the saved draft
   askBtn.disabled = true;
-  const imgUrls = attachedImages.map((a) => a.url);
+  const imgUrls = attachedFiles.filter((a) => a.kind === "image").map((a) => a.url);
+  const attachedTexts = attachedFiles.filter((a) => a.kind === "text").map((a) => ({ name: a.name, content: a.content }));
   activeAnswerEl = addTurn(prompt, imgUrls.length ? imgUrls : null);
-  log.scrollTop = log.scrollHeight; // user just asked — force to bottom so the answer is visible
-  $("exportqa").classList.remove("hidden"); // a Q&A is now in progress — show export immediately
+  log.scrollTop = log.scrollHeight;
+  $("exportqa").classList.remove("hidden");
   activeRaw = "";
   setStatus("Working…");
-  send({ type: "ASK", prompt, tabId: tab?.id, userImages: attachedImages.map((a) => a.b64), windowId: tab?.windowId });
+  send({
+    type: "ASK", prompt, tabId: tab?.id,
+    userImages: attachedFiles.filter((a) => a.kind === "image").map((a) => a.b64),
+    attachedTexts: attachedTexts.length ? attachedTexts : undefined,
+    windowId: tab?.windowId,
+  });
   clearAttachments(); // consumed by this question
 }
 
@@ -582,68 +588,95 @@ async function fileToJpegBase64(file, maxDim = 1568) {
 
 const attachPreview = $("attach-preview");
 
+function isTextFile(file) {
+  if (file.type.startsWith("text/")) return true;
+  if (file.type === "application/json" || file.type === "application/xml") return true;
+  return /\.(txt|md|markdown|csv|json|xml|yaml|yml|log|ini|cfg|conf|tsv|html?|css|js|ts|py|rb|go|rs|java|c|cpp|h|sh|sql)$/i.test(file.name || "");
+}
+
 function renderAttachChips() {
   attachPreview.innerHTML = "";
-  attachedImages.forEach((a, i) => {
+  attachedFiles.forEach((a, i) => {
     const chip = document.createElement("div");
     chip.className = "attach-chip";
-    const img = document.createElement("img");
-    img.src = a.url;
-    img.alt = "Attached image";
+    if (a.kind === "image") {
+      const img = document.createElement("img");
+      img.src = a.url;
+      img.alt = "Attached image";
+      chip.append(img);
+    } else {
+      chip.classList.add("attach-chip-text");
+      chip.textContent = a.name || "text";
+    }
     const rm = document.createElement("button");
     rm.className = "chip-remove";
     rm.title = "Remove";
     rm.textContent = "✕";
-    rm.onclick = () => { URL.revokeObjectURL(a.url); attachedImages.splice(i, 1); saveAndRender(); };
-    chip.append(img, rm);
+    rm.onclick = () => { if (a.url) URL.revokeObjectURL(a.url); attachedFiles.splice(i, 1); saveAndRender(); };
+    chip.append(rm);
     attachPreview.append(chip);
   });
-  if (attachedImages.length) {
+  if (attachedFiles.length) {
     const hint = document.createElement("span");
     hint.className = "attach-hint";
     hint.textContent = `(up to ${MAX_ATTACHMENTS}…)`;
     attachPreview.append(hint);
   }
-  attachPreview.classList.toggle("hidden", attachedImages.length === 0);
+  attachPreview.classList.toggle("hidden", attachedFiles.length === 0);
 }
 
 function saveAndRender() {
   renderAttachChips();
-  if (attachedImages.length) {
-    chrome.storage.session.set({ [attachKey]: attachedImages.map((a) => a.b64) });
+  if (attachedFiles.length) {
+    chrome.storage.session.set({ [attachKey]: attachedFiles });
   } else {
     chrome.storage.session.remove(attachKey);
   }
 }
 
 async function addAttachment(file) {
-  if (!file || !file.type.startsWith("image/")) return;
-  if (attachedImages.length >= MAX_ATTACHMENTS) {
-    setStatus("Max " + MAX_ATTACHMENTS + " images per question.", true);
+  if (!file) return;
+  if (attachedFiles.length >= MAX_ATTACHMENTS) {
+    setStatus("Max " + MAX_ATTACHMENTS + " attachments per question.", true);
+    return;
+  }
+  const isImage = file.type.startsWith("image/");
+  const isText = isTextFile(file);
+  if (!isImage && !isText) {
+    setStatus("Only images and text files (txt, md, csv, json, etc.) are supported.", true);
     return;
   }
   try {
-    setStatus("Processing image…");
-    const b64 = await fileToJpegBase64(file);
-    attachedImages.push({ b64, url: URL.createObjectURL(file) });
+    setStatus("Processing…");
+    if (isImage) {
+      const b64 = await fileToJpegBase64(file);
+      attachedFiles.push({ kind: "image", b64, url: URL.createObjectURL(file) });
+    } else {
+      const content = await file.text();
+      if (content.length > 50000) {
+        setStatus("Text file too large (max ~50KB).", true);
+        return;
+      }
+      attachedFiles.push({ kind: "text", content, name: file.name });
+    }
     saveAndRender();
     setStatus("");
   } catch (e) {
-    setStatus("Couldn't process that image.", true);
+    setStatus("Couldn't process that file.", true);
   }
 }
 
 function clearAttachments() {
-  attachedImages.forEach((a) => URL.revokeObjectURL(a.url));
-  attachedImages = [];
+  attachedFiles.forEach((a) => { if (a.url) URL.revokeObjectURL(a.url); });
+  attachedFiles = [];
   saveAndRender();
 }
 
 $("attach").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", async () => {
-  const files = [...($("file-input").files || [])].filter((f) => f.type.startsWith("image/"));
+  const files = [...($("file-input").files || [])];
   for (const f of files) {
-    if (attachedImages.length >= MAX_ATTACHMENTS) break;
+    if (attachedFiles.length >= MAX_ATTACHMENTS) break;
     await addAttachment(f);
   }
   $("file-input").value = "";
@@ -661,13 +694,13 @@ document.addEventListener("paste", (e) => {
     }
   }
 });
-// Drag-and-drop image files onto the popup.
+// Drag-and-drop files onto the popup.
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", async (e) => {
   e.preventDefault();
-  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  const files = [...(e.dataTransfer?.files || [])];
   for (const f of files) {
-    if (attachedImages.length >= MAX_ATTACHMENTS) break;
+    if (attachedFiles.length >= MAX_ATTACHMENTS) break;
     await addAttachment(f);
   }
 });
@@ -708,7 +741,9 @@ document.addEventListener("drop", async (e) => {
     if (store[draftKey]) promptEl.value = store[draftKey];
     // Restore unsent attached images.
     if (Array.isArray(store[attachKey]) && store[attachKey].length) {
-      attachedImages = store[attachKey].map((b64) => ({ b64: b64, url: `data:image/jpeg;base64,${b64}` }));
+      attachedFiles = store[attachKey].map((a) =>
+        a.kind === "image" ? { ...a, url: `data:image/jpeg;base64,${a.b64}` } : a
+      );
       renderAttachChips();
     }
   }
