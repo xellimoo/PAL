@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.6**.
+Current version: **0.8.7**.
 
 ## What it does
 
@@ -406,6 +406,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   md, csv, json, code, etc.) in addition to images. Text content is prepended to the
   question as reference material. Shared limit of 3 attachments (images + text combined).
   Unsupported file types show an error. Drag-and-drop accepts any file type.
+- **0.8.7** — Fix: delete button on text-file chips was clipped by `overflow: hidden`.
+  Filename now wraps in an inner span so the ✕ button is fully visible. Attachment
+  chips raised above the footer border via `z-index` + `overflow: visible`.
 
 ## Disclaimer
 

@@ -606,7 +606,9 @@ function renderAttachChips() {
       chip.append(img);
     } else {
       chip.classList.add("attach-chip-text");
-      chip.textContent = a.name || "text";
+      const label = document.createElement("span");
+      label.textContent = a.name || "text";
+      chip.append(label);
     }
     const rm = document.createElement("button");
     rm.className = "chip-remove";
