@@ -8,6 +8,10 @@
     <header>
       <div class="brand" title="Pause · Ask · Learn"><span class="logo">▶</span> PAL</div>
       <div class="header-actions">
+        <select id="mode" class="mode-sel" title="Tool mode">
+          <option value="video">Video</option>
+          <option value="plain">Plain</option>
+        </select>
         <select id="provider" class="provider-sel hidden" title="Active provider profile"></select>
         <button id="loadtx" class="icon-btn hidden" title="Load full transcript (scan whole video, cached). Shift-click to force a refresh."><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></button>
         <button id="pastetx" class="icon-btn hidden" title="Paste a transcript for this video (cached, reused for every question)."><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg></button>

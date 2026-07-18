@@ -132,7 +132,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts, msg.mode);
       return;
     }
 
@@ -243,7 +243,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
+async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -292,15 +292,17 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     }
 
     let page = { transcript: [], rect: null, dpr: 1, currentTime: 0, source: "none" };
-    try {
-      const [res] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: pageProbe,
-      });
-      if (res?.result) page = res.result;
-    } catch (e) {
-      // e.g. chrome:// pages or restricted tabs — continue text-only.
-      page.error = String(e?.message || e);
+    const isPlain = mode === "plain";
+    if (!isPlain) {
+      try {
+        const [res] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: pageProbe,
+        });
+        if (res?.result) page = res.result;
+      } catch (e) {
+        page.error = String(e?.message || e);
+      }
     }
 
     // YouTube transcript: reuse cache, else direct download, else a per-question
@@ -323,11 +325,11 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     }
 
     // Direct download (full transcript) — only when nothing is cached yet.
-    const isYouTube = /youtube\.com\/(watch|embed)|youtu\.be\//.test(tab.url || "");
+    const isYouTube = !isPlain && /youtube\.com\/(watch|embed)|youtu\.be\//.test(tab.url || "");
     // Collect every extractor's failure reason so the debug log shows the WHOLE
     // picture (each method used to overwrite the last, hiding why earlier ones failed).
     const ytReasons = [];
-    if (isYouTube && !cached) {
+    if (isYouTube && !isPlain && !cached) {
       try {
         const [r2] = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -359,7 +361,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     // the pot we can't read directly. Briefly toggles CC, then restores it. This is
     // the reliable "direct" full-transcript path; the result is cached so later
     // questions skip it entirely.
-    if (isYouTube && !cached) {
+    if (isYouTube && !isPlain && !cached) {
       try {
         port.postMessage({ type: "STATUS", text: "Reading captions…" });
         const [rv] = await chrome.scripting.executeScript({
@@ -385,7 +387,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     }
 
     // Download gated? Full transcript via the ANDROID player (ungated captions).
-    if (isYouTube && !cached) {
+    if (isYouTube && !isPlain && !cached) {
       try {
         const [ra] = await chrome.scripting.executeScript({
           target: { tabId: tab.id }, world: "MAIN", func: ytPlayerAndroid,
@@ -408,7 +410,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     }
 
     // Fallback: YouTube's internal get_transcript API.
-    if (isYouTube && !cached) {
+    if (isYouTube && !isPlain && !cached) {
       try {
         const [rg] = await chrome.scripting.executeScript({
           target: { tabId: tab.id }, world: "MAIN", func: ytGetTranscript,
@@ -434,7 +436,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
 
     // Still nothing? Last resort for the full transcript: open YouTube's own
     // "Show transcript" panel, scrape it, and close it again (self-reverting UI).
-    if (isYouTube && !cached) {
+    if (isYouTube && !isPlain && !cached) {
       try {
         const [rp] = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -473,7 +475,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     // 2. Capture + crop to the player bounds (device-pixel correct).
     let imageB64 = null;
     let imageNote = "";
-    if (page.rect) {
+    if (!isPlain && page.rect) {
       try {
         port.postMessage({ type: "STATUS", text: "Capturing the frame…" });
         imageB64 = await captureAndCrop(tab.windowId, page.rect, page.dpr);
@@ -492,7 +494,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
     const win = settings.captionWindowSec ?? 20;
     const haveComplete = !!cached?.complete;
     const coveredNow = cached?.covered || [];
-    if (isYouTube && scrubEnabled && page.rect && !haveComplete &&
+    if (isYouTube && !isPlain && scrubEnabled && page.rect && !haveComplete &&
         !rangesCover(coveredNow, page.currentTime, 2)) {
       try {
         port.postMessage({ type: "STATUS", text: "Reading captions around the pause…" });
@@ -517,26 +519,49 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
       }
     }
 
-    // 3. Build context (full vs window+summary) and the request.
-    let { system, mode, tokenEstimate } = buildSystemPrompt({
-      transcript: page.transcript,
-      currentTime: page.currentTime,
-      source: page.source,
-      contextThreshold: settings.contextThreshold ?? 120000,
-      windowMinutes: settings.windowMinutes ?? 10,
-    });
-
-    // No image AND no transcript: the model has zero context. Forbid guessing.
-    if (!imageB64 && (!page.transcript || !page.transcript.length)) {
-      system +=
-        "\n\nIMPORTANT: No screenshot and no transcript could be captured for this " +
-        "video. Do NOT guess or invent what is on screen. Tell the user no video " +
-        "context was available and suggest they ensure a video is the active tab.";
+    // 3. Build context.
+    let system, ctxMode, tokenEstimate;
+    if (isPlain) {
+      // Plain mode: no video persona, no screenshot mention, no anti-hallucination.
+      // If pasted content exists, include it as reference material.
+      system = "";
+      ctxMode = "plain";
+      tokenEstimate = 0;
+    } else {
+      const ctx = buildSystemPrompt({
+        transcript: page.transcript,
+        currentTime: page.currentTime,
+        source: page.source,
+        contextThreshold: settings.contextThreshold ?? 120000,
+        windowMinutes: settings.windowMinutes ?? 10,
+      });
+      system = ctx.system;
+      ctxMode = ctx.mode;
+      tokenEstimate = ctx.tokenEstimate;
+      // No image AND no transcript: the model has zero context. Forbid guessing.
+      if (!imageB64 && (!page.transcript || !page.transcript.length)) {
+        system +=
+          "\n\nIMPORTANT: No screenshot and no transcript could be captured for this " +
+          "video. Do NOT guess or invent what is on screen. Tell the user no video " +
+          "context was available and suggest they ensure a video is the active tab.";
+      }
     }
 
-    let user =
-      `Current video timestamp: ${fmt(page.currentTime)}.\n` +
-      `Question: ${prompt}`;
+    // Build the user message.
+    let user;
+    if (isPlain) {
+      // Plain mode: just the question, optionally with pasted reference content
+      // and attached text files. No "Current video timestamp" prefix.
+      user = prompt;
+      if (page.transcript?.length) {
+        const lines = page.transcript.map((l) => l.text || "").join("\n");
+        user = `Reference material:\n<content>\n${lines}\n</content>\n\n${user}`;
+      }
+    } else {
+      user =
+        `Current video timestamp: ${fmt(page.currentTime)}.\n` +
+        `Question: ${prompt}`;
+    }
     // Prepend any attached text files so the model has the reference material.
     if (attachedTexts?.length) {
       const texts = attachedTexts.map((t) => `--- ${t.name} ---\n${t.content}`).join("\n\n");
@@ -560,7 +585,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts) {
         ? "no transcript"
         : page.source === "youtube-caption-scan"
         ? "captions near the pause"
-        : mode === "full"
+        : ctxMode === "full"
         ? "full transcript"
         : "windowed transcript + outline";
     const imageLabel = (imageB64 ? " + screenshot" : imageNote ? ` + no screenshot (${imageNote})` : "") + ((userImages?.length) ? " + " + userImages.length + " image" + (userImages.length > 1 ? "s" : "") : "");

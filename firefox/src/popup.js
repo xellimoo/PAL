@@ -20,6 +20,7 @@ let attachedFiles = []; // [{ kind:"image", b64, url } | { kind:"text", content,
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
 let attachKey = "vt_attach_global"; // per-tab key for the unsent attachments
 let llmOriginPattern = null; // cached from settings, for runtime host permission
+let currentMode = "video"; // "video" or "plain" — persisted in chrome.storage.local
 
 // Least-privilege: instead of a broad install-time host permission, request access
 // to the specific origins we need at runtime (transient user-activation lasts ~5s,
@@ -132,6 +133,18 @@ $("provider").addEventListener("change", () => {
   send({ type: "SET_ACTIVE_PROFILE", profileId: $("provider").value });
   setStatus("Switching provider…");
 });
+$("mode").addEventListener("change", () => {
+  currentMode = $("mode").value;
+  chrome.storage.local.set({ vt_mode: currentMode });
+  updateModeUI();
+});
+function updateModeUI() {
+  const plain = currentMode === "plain";
+  $("loadtx").classList.toggle("hidden", plain || !$("loadtx").dataset.visible);
+  $("pastetx").classList.toggle("hidden", plain || !$("pastetx").dataset.visible);
+  const titleEl = document.querySelector("#paste-pop .popover-title");
+  if (titleEl) titleEl.textContent = plain ? "Paste reference content" : "Paste this video's transcript";
+}
 
 function setStatus(text, isError) {
   if (!text) {
@@ -194,7 +207,7 @@ function onMessage(msg) {
       $("notconfigured").classList.toggle("hidden", msg.configured);
       $("unlock").classList.toggle("hidden", !msg.locked);
       if (msg.locked) $("passphrase").value = ""; // never show stale/autofilled dots
-      askBtn.disabled = !msg.configured;
+      askBtn.disabled = !msg.configured || msg.locked;
       renderProvider(msg.profiles, msg.activeProfileId);
       break;
     case "NEED_CONFIG":
@@ -211,6 +224,7 @@ function onMessage(msg) {
     case "UNLOCKED":
       $("unlock").classList.add("hidden");
       $("passphrase").value = "";
+      askBtn.disabled = false; // re-enable now that the key is unlocked
       setStatus(""); // clear any "Wrong passphrase." error
       break;
     case "STATUS":
@@ -359,7 +373,7 @@ async function ask() {
   activeRaw = "";
   setStatus("Working…");
   send({
-    type: "ASK", prompt, tabId: tab?.id,
+    type: "ASK", prompt, tabId: tab?.id, mode: currentMode,
     userImages: attachedFiles.filter((a) => a.kind === "image").map((a) => a.b64),
     attachedTexts: attachedTexts.length ? attachedTexts : undefined,
     windowId: tab?.windowId,
@@ -371,6 +385,7 @@ askBtn.addEventListener("click", ask);
 promptEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
+    if (askBtn.disabled) return; // locked or not configured — don't send
     ask();
   }
 });
@@ -717,6 +732,10 @@ document.addEventListener("drop", async (e) => {
 
 // Restore this tab's prior turns (survives popup close) and probe state.
 (async function init() {
+  // Request state ASAP so the passphrase prompt shows immediately — before the
+  // async tab/mode/history work below (which can delay or throw).
+  send({ type: "GET_STATE" });
+
   if (DETACHED) {
     document.body.classList.add("windowed");
     $("detach").classList.add("hidden");
@@ -730,12 +749,16 @@ document.addEventListener("drop", async (e) => {
       : "Ask about what's on screen…  (drag up to three images here to attach)";
   }
   const tab = await getTargetTab();
+  // Restore the mode.
+  const modeStore = await chrome.storage.local.get("vt_mode");
+  currentMode = modeStore.vt_mode || "video";
+  $("mode").value = currentMode;
   if (tab && /youtube\.com\/(watch|embed)|youtu\.be\//.test(tab.url || "")) {
-    $("loadtx").classList.remove("hidden");
+    $("loadtx").dataset.visible = "1";
   } else if (tab && /^https?:/i.test(tab.url || "")) {
-    // Non-YouTube site: offer a paste-transcript button instead of the ⤓ download.
-    $("pastetx").classList.remove("hidden");
+    $("pastetx").dataset.visible = "1";
   }
+  updateModeUI();
   if (tab) {
     draftKey = `vt_draft_${tab.id}`;
     attachKey = `vt_attach_${tab.id}`;
@@ -769,7 +792,6 @@ document.addEventListener("drop", async (e) => {
   if (s?.baseUrl) llmOriginPattern = originPattern(s.baseUrl);
   // Show the running token total immediately.
   renderTokens((await chrome.storage.local.get("vt_usage")).vt_usage);
-  send({ type: "GET_STATE" });
   // Reattach to an answer that was streaming when the popup closed/reopened.
   if (tab?.id != null) send({ type: "RESUME_ASK", tabId: tab.id });
 })();

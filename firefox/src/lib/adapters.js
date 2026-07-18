@@ -26,6 +26,12 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
     for (const img of images) {
       content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } });
     }
+    const messages = [
+      ...history.map((h) => ({ role: h.role, content: h.text })),
+      { role: "user", content },
+    ];
+    const body = { model, max_tokens: maxTokens, stream: true, messages };
+    if (system) body.system = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
     return {
       url: base.endsWith("/messages") ? base : `${base}/messages`,
       headers: {
@@ -38,17 +44,7 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
         // Required when Anthropic itself sees a browser-origin request:
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: {
-        model,
-        max_tokens: maxTokens,
-        stream: true,
-        // Transcript carried in system as a cacheable ephemeral block.
-        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-        messages: [
-          ...history.map((h) => ({ role: h.role, content: h.text })),
-          { role: "user", content },
-        ],
-      },
+      body,
     };
   }
 
@@ -57,19 +53,20 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
     for (const img of images) parts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
     // key goes in the query string for the native Gemini endpoint
     const root = base.endsWith("/v1beta") || base.endsWith("/v1") ? base : base;
+    const body = {
+      contents: [
+        ...history.map((h) => ({
+          role: h.role === "assistant" ? "model" : "user",
+          parts: [{ text: h.text }],
+        })),
+        { role: "user", parts },
+      ],
+    };
+    if (system) body.systemInstruction = { parts: [{ text: system }] };
     return {
       url: `${root}/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`,
       headers: { "content-type": "application/json" },
-      body: {
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [
-          ...history.map((h) => ({
-            role: h.role === "assistant" ? "model" : "user",
-            parts: [{ text: h.text }],
-          })),
-          { role: "user", parts },
-        ],
-      },
+      body,
     };
   }
 
@@ -91,10 +88,9 @@ export function buildRequest({ spec, baseUrl, apiKey, model, system, user, image
       stream: true,
       stream_options: { include_usage: true }, // ask for a final usage chunk
       messages: [
-        { role: "system", content: system },
+        ...(system ? [{ role: "system", content: system }] : []),
         ...history.map((h) => ({ role: h.role, content: h.text })),
-        { role: "user", content: userContent },
-      ],
+        { role: "user", content: userContent }],
     },
   };
 }

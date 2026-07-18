@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.9**.
+Current version: **0.8.10**.
 
 ## What it does
 
@@ -427,6 +427,13 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   `ytRestore`, `ytCaptionsViaPlayer`) use a retry-and-verify loop that clicks until
   `aria-pressed` matches the original state. `ytCaptionWindow` also wrapped in
   try/finally so CC is restored even on error.
+- **0.8.10** — **Plain Mode**: a Video/Plain dropdown in the header for non-video
+  use. Plain mode sends the question as-is (no screenshot, no transcript extraction,
+  no video system prompt); pasted reference content and attached files/images still work.
+  Fix: empty system message caused HTTP 400 on some APIs (Kimi) — now omitted entirely
+  when empty. Fix: passphrase prompt timing — GET_STATE fires first in init so the unlock
+  prompt shows immediately. Fix: Ask button stays disabled while key is locked; Enter key
+  blocked until unlocked.
 
 ## Disclaimer
 
