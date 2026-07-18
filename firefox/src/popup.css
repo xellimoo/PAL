@@ -31,6 +31,7 @@ header {
   background: #fff;
 }
 .brand { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.brand .version { font-size: 10px; font-weight: 400; color: #9aa0ad; }
 .logo {
   background: #2563eb; color: #fff; border-radius: 5px;
   width: 20px; height: 20px; display: inline-flex;

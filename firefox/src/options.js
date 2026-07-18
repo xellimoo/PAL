@@ -2,6 +2,9 @@ import { encryptSecret, decryptSecret } from "./lib/crypto.js";
 
 const $ = (id) => document.getElementById(id);
 
+// Show the version from the manifest.
+document.querySelectorAll(".version").forEach((el) => { el.textContent = "v" + chrome.runtime.getManifest().version; });
+
 const HINTS = {
   openai: "Example: https://api.deepseek.com  ·  model deepseek-chat. Vision needs a vision-capable model.",
   anthropic: "Native Claude API. Transcript is sent as an ephemeral cached block.",

@@ -5,6 +5,7 @@ body {
   margin: 0 auto; padding: 24px 20px 60px;
 }
 h1 { font-size: 19px; display: flex; align-items: center; gap: 8px; }
+.version { font-size: 14px; font-weight: 400; color: #9aa0ad; }
 .logo {
   background: #2563eb; color: #fff; border-radius: 6px;
   width: 26px; height: 26px; display: inline-flex;

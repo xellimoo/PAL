@@ -482,7 +482,9 @@ async function exportQA() {
   let host = "";
   try { host = new URL(url).hostname; } catch {}
   const md = buildMarkdown({ title, url, host, when: new Date().toLocaleString(), hist });
-  downloadText(md, "PAL - " + sanitizeName(title).slice(0, 60) + ".md");
+  const d = new Date();
+  const ts = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
+  downloadText(md, "PAL-" + sanitizeName(title).slice(0, 50) + "-" + ts + ".md");
   setStatus(`Exported ${hist.length} Q&A as Markdown.`);
 }
 
@@ -498,7 +500,7 @@ function buildMarkdown({ title, url, host, when, hist }) {
 }
 
 function sanitizeName(s) {
-  return (s || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Q&A";
+  return (s || "").replace(/[\\/:*?"<>|\s]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "Q&A";
 }
 
 function downloadText(text, filename) {
@@ -732,6 +734,9 @@ document.addEventListener("drop", async (e) => {
 
 // Restore this tab's prior turns (survives popup close) and probe state.
 (async function init() {
+  // Show the version from the manifest (always in sync — no manual variable).
+  const ver = chrome.runtime.getManifest().version;
+  document.querySelectorAll(".version").forEach((el) => { el.textContent = "v" + ver; });
   // Request state ASAP so the passphrase prompt shows immediately — before the
   // async tab/mode/history work below (which can delay or throw).
   send({ type: "GET_STATE" });
