@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.10**.
+Current version: **0.8.11**.
 
 ## What it does
 
@@ -434,6 +434,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   when empty. Fix: passphrase prompt timing — GET_STATE fires first in init so the unlock
   prompt shows immediately. Fix: Ask button stays disabled while key is locked; Enter key
   blocked until unlocked.
+- **0.8.11** — Version number (from manifest) shown in the popup title and settings
+  header. Export filename now includes timestamp: `PAL-resource-timestamp.md` (no spaces).
 
 ## Disclaimer
 
