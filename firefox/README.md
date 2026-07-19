@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.12**.
+Current version: **0.8.13**.
 
 ## What it does
 
@@ -430,6 +430,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   header. Export filename now includes timestamp: `PAL-resource-timestamp.md` (no spaces).
 - **0.8.12** — In video mode, the model prefixes its answer with
   "Current timestamp: HH:MM:SS" (the playback position when the question was asked).
+- **0.8.13** — Markdown export: answer headings no longer clash with the `##` question
+  headings — any `##` in an answer is demoted to `###` (code blocks left untouched).
 
 ## Disclaimer
 

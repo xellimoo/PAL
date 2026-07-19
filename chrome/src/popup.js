@@ -494,9 +494,31 @@ function buildMarkdown({ title, url, host, when, hist }) {
   if (host) L.push(`**Site:** ${host}`);
   L.push(`**Exported:** ${when}`, "", "---", "");
   hist.forEach((t, i) => {
-    L.push(`## Q${i + 1}: ${(t.q || "").trim()}`, "", (t.a || "").trim(), "");
+    L.push(`## Q${i + 1}: ${(t.q || "").trim()}`, "", demoteAnswerH2((t.a || "").trim()), "");
   });
   return L.join("\n").trim() + "\n";
+}
+
+// Question headings are exported as "##", so an answer that also uses "##"
+// would clash with (and read like) a question. Demote any level-2 ATX header
+// in an answer to level 3 ("###"); other header levels are left unchanged (so
+// this never creates a new "##"). Fenced code blocks are skipped so "##"
+// inside code (comments, markdown samples) stays verbatim.
+function demoteAnswerH2(answer) {
+  if (!answer) return answer;
+  const out = [];
+  let inFence = false;
+  for (let line of answer.split("\n")) {
+    if (/^ {0,3}(`{3,}|~{3,})/.test(line)) {
+      inFence = !inFence;
+    } else if (!inFence) {
+      // exactly two leading `#` (0–3 spaces indent) then a space/tab/EOL, so
+      // "###" and deeper are not matched.
+      line = line.replace(/^( {0,3})##(?=[ \t]|$)/, "$1###");
+    }
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 function sanitizeName(s) {
