@@ -101,6 +101,12 @@ function humanTime(s) {
   return `~${Math.round(s / 60)} min`;
 }
 
+// Strip trailing platform suffixes (" - YouTube" etc.) from a page title for
+// cleaner display. Shared by the export filename and the detached-window hint.
+function cleanTabTitle(s) {
+  return (s || "").replace(/\s*[-–—]\s*(YouTube|Netflix|Coursera|Udemy|Khan Academy)\s*$/i, "").trim();
+}
+
 let scrubTabId = null; // tab awaiting a scrub confirmation
 
 // "1Q" for one question, "nQs" for more, "" when none — appended to the token
@@ -571,7 +577,7 @@ async function exportQA() {
       },
     });
     title = (r?.result || "").trim();
-    title = title.replace(/\s*[-–—]\s*(YouTube|Netflix|Coursera|Udemy|Khan Academy)\s*$/i, "").trim();
+    title = cleanTabTitle(title);
   } catch {}
   // If no title (non-video page, or access denied), use a date-based default.
   if (!title) {
@@ -663,7 +669,12 @@ $("detach").addEventListener("click", async () => {
   const tab = await getTargetTab();
   const origins = [llmOriginPattern, tab?.url && originPattern(tab.url)].filter(Boolean);
   if (origins.length) await ensureOrigins(origins);
-  const url = chrome.runtime.getURL("src/popup.html") + "?window=1";
+  // Remember the tab we detached from so the window can show an "Initial tab"
+  // hint (where its Q&A live / where to export from). Encoded into the URL only
+  // when a new window is created, so re-detaching (focus) keeps the original.
+  const initTitle = cleanTabTitle(tab?.title);
+  const url = chrome.runtime.getURL("src/popup.html") + "?window=1"
+    + (initTitle ? "&t=" + encodeURIComponent(initTitle) : "");
   // Single instance: if our detached window still exists, focus it instead of
   // opening another. We match by stored window id because matching by tab.url
   // would need the 'tabs' permission, which we deliberately don't request.
@@ -867,6 +878,14 @@ document.addEventListener("drop", async (e) => {
   if (DETACHED) {
     document.body.classList.add("windowed");
     $("detach").classList.add("hidden");
+    // Show which tab this window detached from — a hint for where its Q&A live
+    // and which tab to export from (history is stored per-tab).
+    const initTitle = (new URLSearchParams(location.search).get("t") || "").trim();
+    if (initTitle) {
+      $("inittab").textContent = "Initial tab: " + initTitle;
+      $("inittab").title = initTitle; // full title on hover (CSS truncates)
+      $("inittab").classList.remove("hidden");
+    }
   } else {
     // The native file picker closes the attached popup; hide the button there.
     // Users paste (Ctrl+V) or drag-drop instead.

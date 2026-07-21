@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.15**.
+Current version: **0.8.16**.
 
 ## What it does
 
@@ -446,6 +446,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   question and its answer after a confirm prompt.
 - **0.8.15** — The token meter shows how many questions you've asked (`1Q`, `2Qs`, …)
   after the cached total; resetting the token counter leaves the question count intact.
+- **0.8.16** — The detached window shows an "Initial tab" hint above the token meter —
+  the tab you detached from, so you know where its Q&A live and which tab to export from.
 
 ## Disclaimer
 

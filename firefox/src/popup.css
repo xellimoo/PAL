@@ -108,6 +108,11 @@ main {
   background: #f3f1ea; border-top: 1px solid #e7e4dd;
 }
 .status.error { color: #b91c1c; background: #fef2f2; }
+.inittab {
+  padding: 4px 12px; font-size: 11px; color: #6b7280;
+  background: #f3f1ea; border-top: 1px solid #e7e4dd;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .tokens {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 12px; font-size: 11px; color: #6b7280;
