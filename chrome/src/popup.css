@@ -143,6 +143,18 @@ footer textarea {
 }
 .q-thumbs { display: flex; gap: 4px; margin: 2px 0; align-self: flex-end; }
 .q-thumb { width: 60px; height: 60px; max-height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #d7d3c9; }
+/* Per-bubble action row (copy / delete) — sits outside the bubble, right-aligned. */
+.turn-actions { display: flex; justify-content: flex-end; gap: 2px; }
+.bubble-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; border: none; background: none;
+  color: #9aa0ad; border-radius: 4px; cursor: pointer;
+}
+.bubble-btn:hover { background: #e7e4dd; color: #1f2330; }
+.bubble-btn:active { color: #2563eb; }
+.bubble-btn:disabled, .bubble-btn:disabled:hover { opacity: 0.3; background: none; color: #9aa0ad; cursor: default; }
+.bubble-btn svg { width: 13px; height: 13px; display: block; }
+.bubble-btn.del-turn:hover { color: #b91c1c; }
 button {
   border: none; border-radius: 8px; background: #2563eb; color: #fff;
   padding: 0 14px; font-weight: 600; cursor: pointer;

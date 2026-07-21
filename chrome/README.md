@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.13**.
+Current version: **0.8.14**.
 
 ## What it does
 
@@ -440,6 +440,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   "Current timestamp: HH:MM:SS" (the playback position when the question was asked).
 - **0.8.13** — Markdown export: answer headings no longer clash with the `##` question
   headings — any `##` in an answer is demoted to `###` (code blocks left untouched).
+- **0.8.14** — Each question and answer shows small **copy** / **delete** buttons at
+  the bottom-right (outside the bubble): copy grabs the question or answer text (the
+  answer's copy button appears once its generation finishes); delete removes that
+  question and its answer after a confirm prompt.
 
 ## Disclaimer
 

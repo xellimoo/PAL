@@ -171,6 +171,18 @@ function stickToBottom() {
   if (log.scrollHeight - log.scrollTop - log.clientHeight < 60) log.scrollTop = log.scrollHeight;
 }
 
+const COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const DEL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
+function bubbleBtn(svg, title) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "bubble-btn";
+  b.title = title;
+  b.innerHTML = svg;
+  return b;
+}
+
 function addTurn(q, imgUrls) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
@@ -192,13 +204,84 @@ function addTurn(q, imgUrls) {
     }
     wrap.append(thumbs);
   }
+  // Question actions (outside the bubble, bottom-right): copy + delete the turn.
+  const qActions = document.createElement("div");
+  qActions.className = "turn-actions";
+  const copyQ = bubbleBtn(COPY_SVG, "Copy question");
+  copyQ.addEventListener("click", () => copyText(q));
+  qActions.append(copyQ);
+  const delBtn = bubbleBtn(DEL_SVG, "Delete this question and its answer");
+  delBtn.classList.add("del-turn");
+  delBtn.addEventListener("click", () => deleteTurnEl(wrap));
+  qActions.append(delBtn);
+  wrap.append(qActions);
   const aEl = document.createElement("div");
   aEl.className = "a";
-  aEl.textContent = "";
+  aEl.rawA = "";
   wrap.append(aEl);
+  // Answer actions (outside the bubble, bottom-right): copy the answer.
+  const aActions = document.createElement("div");
+  aActions.className = "turn-actions a-actions";
+  const copyA = bubbleBtn(COPY_SVG, "Copy answer");
+  copyA.addEventListener("click", () => copyText(aEl.rawA || ""));
+  aActions.append(copyA);
+  wrap.append(aActions);
   log.append(wrap);
   stickToBottom();
   return aEl;
+}
+
+// Copy text to the clipboard with brief status feedback.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text || "");
+    setStatus("Copied to clipboard.");
+  } catch {
+    setStatus("Couldn't access the clipboard.", true);
+  }
+}
+
+// Delete one Q&A turn from the DOM and from this tab's stored history. The
+// streaming turn is refused (its history entry is written only on completion).
+async function deleteTurnEl(wrap) {
+  const aEl = wrap.querySelector(".a");
+  if (aEl === activeAnswerEl) { setStatus("Can't delete while the answer is generating.", true); return; }
+  if (!confirm("Delete this question? This will also delete its answer.")) return;
+  const index = Array.from(log.querySelectorAll(".turn")).indexOf(wrap);
+  if (index === -1) return;
+  const tab = await getTargetTab();
+  if (tab) {
+    const key = `vt_hist_${tab.id}`;
+    const store = await chrome.storage.session.get(key);
+    const arr = store[key] || [];
+    if (index < arr.length) {
+      arr.splice(index, 1);
+      if (arr.length) await chrome.storage.session.set({ [key]: arr });
+      else await chrome.storage.session.remove(key);
+    }
+  }
+  wrap.remove();
+  if (!log.querySelector(".turn")) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "Conversation reset. Ask a new question.";
+    log.append(e);
+    $("exportqa").classList.add("hidden");
+  }
+  setStatus("Question deleted.");
+}
+
+// While a turn's answer is streaming: disable its delete button and hide its
+// answer-copy button (shown again once generation finishes). Called whenever
+// activeAnswerEl changes.
+function refreshTurnState() {
+  for (const turn of log.querySelectorAll(".turn")) {
+    const streaming = turn.querySelector(".a") === activeAnswerEl;
+    const del = turn.querySelector(".del-turn");
+    if (del) del.disabled = streaming;
+    const aActions = turn.querySelector(".a-actions");
+    if (aActions) aActions.classList.toggle("hidden", streaming);
+  }
 }
 
 function onMessage(msg) {
@@ -238,6 +321,7 @@ function onMessage(msg) {
       activeAnswerEl = addTurn(msg.prompt, msg.imgs ? msg.imgs.map((b) => `data:image/jpeg;base64,${b}`) : null);
       activeRaw = msg.full || "";
       activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+      activeAnswerEl.rawA = activeRaw;
       stickToBottom();
       $("exportqa").classList.remove("hidden");
       if (msg.terminated) {
@@ -246,11 +330,13 @@ function onMessage(msg) {
       } else {
         setStatus("Generating…"); // the SW is still streaming — TOKENs will follow
       }
+      refreshTurnState();
       break;
     case "TOKEN":
       if (activeAnswerEl) {
         activeRaw += msg.text;
         activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+        activeAnswerEl.rawA = activeRaw;
         stickToBottom();
       }
       break;
@@ -267,6 +353,7 @@ function onMessage(msg) {
     case "DONE":
       askBtn.disabled = false;
       activeAnswerEl = null;
+      refreshTurnState();
       $("exportqa").classList.remove("hidden"); // there's now a Q&A to export
       break;
     case "TX_PROGRESS":
@@ -344,6 +431,7 @@ function onMessage(msg) {
         activeAnswerEl.textContent = "⚠ " + msg.message;
       }
       activeAnswerEl = null;
+      refreshTurnState();
       break;
   }
 }
@@ -368,6 +456,7 @@ async function ask() {
   const imgUrls = attachedFiles.filter((a) => a.kind === "image").map((a) => a.url);
   const attachedTexts = attachedFiles.filter((a) => a.kind === "text").map((a) => ({ name: a.name, content: a.content }));
   activeAnswerEl = addTurn(prompt, imgUrls.length ? imgUrls : null);
+  refreshTurnState();
   log.scrollTop = log.scrollHeight;
   $("exportqa").classList.remove("hidden");
   activeRaw = "";
@@ -794,6 +883,7 @@ document.addEventListener("drop", async (e) => {
     const hist = store[key] || [];
     for (const t of hist) {
       const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
+      aEl.rawA = t.a;
       aEl.innerHTML = renderMarkdown(t.a);
     }
     $("exportqa").classList.toggle("hidden", hist.length === 0);
