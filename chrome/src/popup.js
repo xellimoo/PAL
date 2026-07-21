@@ -103,11 +103,21 @@ function humanTime(s) {
 
 let scrubTabId = null; // tab awaiting a scrub confirmation
 
-function renderTokens(total) {
+// "1Q" for one question, "nQs" for more, "" when none — appended to the token
+// meter so you can see how many questions you've asked. Sourced from vt_qcount,
+// which is separate from the token totals so resetting tokens never clears it.
+function qLabel(n) {
+  n = n || 0;
+  return n > 0 ? (n === 1 ? "1Q" : `${n}Qs`) : "";
+}
+
+function renderTokens(total, qcount) {
   total = total || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const cached = (total.cacheRead || 0) + (total.cacheWrite || 0);
-  $("tok-text").textContent =
-    `Σ tokens — in ${hk(total.input)} · out ${hk(total.output)} · cached ${hk(cached)}`;
+  let s = `Σ tokens — in ${hk(total.input)} · out ${hk(total.output)} · cached ${hk(cached)}`;
+  const q = qLabel(qcount);
+  if (q) s += ` · ${q}`;
+  $("tok-text").textContent = s;
 }
 
 // Provider switcher (only shown when >1 profile is saved). Rebuilt only when the
@@ -341,7 +351,7 @@ function onMessage(msg) {
       }
       break;
     case "USAGE": {
-      renderTokens(msg.total);
+      renderTokens(msg.total, msg.qcount);
       const t = msg.turn || {};
       const parts = [`${hk(t.input)} in`];
       if (t.cacheRead) parts.push(`${hk(t.cacheRead)} cached-read`);
@@ -487,7 +497,9 @@ $("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("tok-reset").addEventListener("click", async () => {
   const zero = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   await chrome.storage.local.set({ vt_usage: zero });
-  renderTokens(zero);
+  // Reset tokens only — the question count (vt_qcount) is intentionally left as-is.
+  const qcount = (await chrome.storage.local.get("vt_qcount")).vt_qcount || 0;
+  renderTokens(zero, qcount);
 });
 $("loadtx").addEventListener("click", async (e) => {
   const force = e.shiftKey; // shift-click = force a fresh download/scan
@@ -908,7 +920,8 @@ document.addEventListener("drop", async (e) => {
   const s = (await chrome.storage.local.get("vt_settings")).vt_settings;
   if (s?.baseUrl) llmOriginPattern = originPattern(s.baseUrl);
   // Show the running token total immediately.
-  renderTokens((await chrome.storage.local.get("vt_usage")).vt_usage);
+  const _u = await chrome.storage.local.get(["vt_usage", "vt_qcount"]);
+  renderTokens(_u.vt_usage, _u.vt_qcount);
   // Reattach to an answer that was streaming when the popup closed/reopened.
   if (tab?.id != null) send({ type: "RESUME_ASK", tabId: tab.id });
 })();

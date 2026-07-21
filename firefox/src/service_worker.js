@@ -620,8 +620,8 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     chrome.storage.session.remove(progKey).catch(() => {});
 
     // Accumulate a running token total and report turn + total.
-    const total = await addUsage(usage);
-    safePost(ask.port, { type: "USAGE", turn: usage, total });
+    const { total, qcount } = await addUsage(usage);
+    safePost(ask.port, { type: "USAGE", turn: usage, total, qcount });
     safePost(ask.port, { type: "DONE", full: ask.full });
   } catch (e) {
     if (ask) { activeAsks.delete(ask.tabId); chrome.storage.session.remove(`vt_prog_${ask.tabId}`).catch(() => {}); }
@@ -966,15 +966,18 @@ async function runScrub(tabId, port) {
 }
 
 async function addUsage(turn) {
-  const t = (await chrome.storage.local.get("vt_usage")).vt_usage || {
+  const cur = await chrome.storage.local.get(["vt_usage", "vt_qcount"]);
+  const t = cur.vt_usage || {
     input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
   };
   t.input += turn.input || 0;
   t.output += turn.output || 0;
   t.cacheRead += turn.cacheRead || 0;
   t.cacheWrite += turn.cacheWrite || 0;
-  await chrome.storage.local.set({ vt_usage: t });
-  return t;
+  // One more question asked; kept in its own key so the token reset can't clear it.
+  const qcount = (cur.vt_qcount || 0) + 1;
+  await chrome.storage.local.set({ vt_usage: t, vt_qcount: qcount });
+  return { total: t, qcount };
 }
 
 async function getHistory(tabId) {

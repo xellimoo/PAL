@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.14**.
+Current version: **0.8.15**.
 
 ## What it does
 
@@ -444,6 +444,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   the bottom-right (outside the bubble): copy grabs the question or answer text (the
   answer's copy button appears once its generation finishes); delete removes that
   question and its answer after a confirm prompt.
+- **0.8.15** — The token meter shows how many questions you've asked (`1Q`, `2Qs`, …)
+  after the cached total; resetting the token counter leaves the question count intact.
 
 ## Disclaimer
 
