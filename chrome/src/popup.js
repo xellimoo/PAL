@@ -276,6 +276,13 @@ async function deleteTurnEl(wrap) {
       else await chrome.storage.session.remove(key);
     }
   }
+  // Decrement the global question count (token totals are left as-is) and refresh
+  // the meter so "nQs" stays in sync with deletions.
+  const qc = await chrome.storage.local.get(["vt_qcount", "vt_usage"]);
+  const qcount = Math.max(0, (qc.vt_qcount || 0) - 1);
+  if (qcount > 0) await chrome.storage.local.set({ vt_qcount: qcount });
+  else await chrome.storage.local.remove("vt_qcount");
+  renderTokens(qc.vt_usage, qcount);
   wrap.remove();
   if (!log.querySelector(".turn")) {
     const e = document.createElement("div");
@@ -546,6 +553,53 @@ document.addEventListener("click", (e) => {
   if (pastePop.contains(e.target) || e.target === $("pastetx")) return;
   pastePop.classList.add("hidden");
 });
+
+// --- Question-list navigator (jump to a past question) ---
+const qlistPop = $("qlist-pop");
+$("qlist").addEventListener("click", (e) => {
+  e.stopPropagation(); // don't let the click-outside handler re-close it
+  if (qlistPop.classList.contains("hidden")) renderQList();
+  qlistPop.classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (qlistPop.classList.contains("hidden")) return;
+  if (qlistPop.contains(e.target) || e.target === $("qlist")) return;
+  qlistPop.classList.add("hidden");
+});
+// Rebuild the list from the live DOM each open (DOM order == history order), then
+// scroll the chosen question to the top of the chat and flash its bubble.
+function renderQList() {
+  qlistPop.innerHTML = "";
+  const turns = Array.from(log.querySelectorAll(".turn"));
+  if (!turns.length) {
+    const empty = document.createElement("div");
+    empty.className = "qlist-empty";
+    empty.textContent = "No questions yet.";
+    qlistPop.append(empty);
+    return;
+  }
+  turns.forEach((turn, i) => {
+    const q = turn.querySelector(".q")?.textContent || "(question)";
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "qlist-item";
+    row.title = q;
+    const num = document.createElement("span");
+    num.className = "qlist-num";
+    num.textContent = `Q${i + 1}`;
+    const txt = document.createElement("span");
+    txt.className = "qlist-text";
+    txt.textContent = q;
+    row.append(num, txt);
+    row.addEventListener("click", () => {
+      qlistPop.classList.add("hidden");
+      turn.scrollIntoView({ block: "start", behavior: "smooth" });
+      turn.classList.add("jump-highlight");
+      setTimeout(() => turn.classList.remove("jump-highlight"), 1200);
+    });
+    qlistPop.append(row);
+  });
+}
 
 // --- Export Q&A as Markdown ---
 // Gathers this tab's questions/answers plus the video's title (from the page, when

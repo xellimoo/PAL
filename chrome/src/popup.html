@@ -72,11 +72,17 @@
     </div>
 
     <footer>
+      <div id="qlist-pop" class="hidden" role="dialog" aria-label="Jump to a question"></div>
       <div id="attach-preview" class="hidden"></div>
       <div class="prompt-row">
-        <button id="attach" class="icon-btn" title="Attach an image or text file (up to 3)">
-          <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-        </button>
+        <div class="attach-col">
+          <button id="qlist" class="icon-btn" title="Jump to a question">
+            <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button id="attach" class="icon-btn" title="Attach an image or text file (up to 3)">
+            <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+        </div>
         <textarea id="prompt" rows="2" placeholder="Ask about what's on screen…"></textarea>
         <button id="ask" disabled>Ask</button>
       </div>
