@@ -773,6 +773,11 @@ $("resetchat").addEventListener("click", async () => {
   log.append(e);
   setStatus("Conversation reset.");
   $("exportqa").classList.add("hidden");
+  // Reset the question count too (token totals are left as-is) so the meter's
+  // "nQs" clears until the next question is asked.
+  await chrome.storage.local.remove("vt_qcount");
+  const usage = (await chrome.storage.local.get("vt_usage")).vt_usage;
+  renderTokens(usage, 0);
 });
 
 // --- Attach image (file select or paste) ---
