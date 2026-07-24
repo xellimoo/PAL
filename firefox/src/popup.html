@@ -57,7 +57,10 @@
 
     <main id="log" aria-live="polite"></main>
 
-    <div id="status" class="status hidden"></div>
+    <div id="status" class="status hidden">
+      <span id="status-text"></span>
+      <button id="abortask" class="status-abort hidden" title="Cancel this question and put it back in the input">Abort</button>
+    </div>
 
     <div id="scrubctl" class="scrubctl hidden">
       <span id="scrubprog"></span>

@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.18**.
+Current version: **0.8.19**.
 
 ## What it does
 
@@ -453,6 +453,11 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   decrements the token meter's question count.
 - **0.8.18** — Resetting a conversation now also clears the token meter's question count
   (it stays hidden until you ask again, then shows 1Q).
+- **0.8.19** — Configurable LLM response timeout (default 60s; idle/no-progress — resets
+  on every token, so a healthy long answer isn't cut off) plus an Abort button on the
+  status line that cancels the current question and puts it back in the input. The
+  Advanced settings section also gets its own Save button (it previously only saved via
+  a provider profile's Save).
 
 ## Disclaimer
 

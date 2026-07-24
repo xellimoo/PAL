@@ -169,6 +169,12 @@ async function handleMessage(msg, port) {
       cancelScrub = true; // honored at the next chunk boundary
       return;
     }
+
+    if (msg.type === "ABORT_ASK") {
+      const a = activeAsks.get(msg.tabId);
+      if (a) { a.abortReason = "user"; a.abort.abort(); } // rejects the in-flight fetch
+      return;
+    }
   } catch (e) {
     port.postMessage({ type: "ERROR", message: String(e?.message || e) });
   }
@@ -277,7 +283,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
     // setup — so a popup that closed right after Ask and reopens during setup can
     // reattach (RESUME_ASK finds the entry) and the question survives SW termination.
-    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, ...((userImages?.length) ? { imgs: userImages } : {}) };
+    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, abort: new AbortController(), abortTimer: null, abortReason: null, ...((userImages?.length) ? { imgs: userImages } : {}) };
     activeAsks.set(tab.id, ask);
     const progKey = `vt_prog_${tab.id}`;
     chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
@@ -592,11 +598,15 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     const ctxNote = `on ${host} • ${transcriptLabel}${imageLabel} • ~${tokenEstimate.toLocaleString()} ctx tokens`;
     port.postMessage({ type: "STATUS", text: `Asking ${settings.model} (${ctxNote})…` });
 
-    // 4. Stream the response.
+    // 4. Stream the response. Arm an idle/no-progress timeout (reset per token below);
+    // the same AbortController backs the popup's manual Abort button (ABORT_ASK).
+    const timeoutSec = settings.llmTimeoutSec ?? 60;
+    armTimeout(ask, timeoutSec);
     const resp = await fetch(req.url, {
       method: "POST",
       headers: req.headers,
       body: JSON.stringify(req.body),
+      signal: ask.abort.signal,
     });
 
     if (!resp.ok) {
@@ -607,6 +617,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     safePost(ask.port, { type: "ANSWER_START" });
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     for await (const chunk of streamText(settings.spec || "openai", resp, usage)) {
+      armTimeout(ask, timeoutSec); // idle timer resets on each token
       ask.full += chunk;
       safePost(ask.port, { type: "TOKEN", text: chunk });
       if (ask.full.length - ask.saved >= 200) {
@@ -614,6 +625,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
         chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
       }
     }
+    clearTimeout(ask.abortTimer); // completed normally — cancel the idle timer
     // Persist the final turn so a reopened popup can render it even if it closed.
     await appendHistory(tab.id, prompt, ask.full, userImages?.length ? userImages : undefined);
     activeAsks.delete(tab.id);
@@ -624,8 +636,13 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     safePost(ask.port, { type: "USAGE", turn: usage, total, qcount });
     safePost(ask.port, { type: "DONE", full: ask.full });
   } catch (e) {
-    if (ask) { activeAsks.delete(ask.tabId); chrome.storage.session.remove(`vt_prog_${ask.tabId}`).catch(() => {}); }
-    safePost(ask?.port || port, { type: "ERROR", message: String(e?.message || e) });
+    if (ask) { clearTimeout(ask.abortTimer); activeAsks.delete(ask.tabId); chrome.storage.session.remove(`vt_prog_${ask.tabId}`).catch(() => {}); }
+    if (e?.name === "AbortError") {
+      // User clicked Abort or the idle timeout fired — restore the question, not a scary error.
+      safePost(ask?.port || port, { type: "ASK_ABORTED", reason: ask?.abortReason === "timeout" ? "timeout" : "user" });
+    } else {
+      safePost(ask?.port || port, { type: "ERROR", message: String(e?.message || e) });
+    }
   }
 }
 
@@ -635,6 +652,13 @@ function safePost(port, msg) {
   } catch {
     // popup closed; ignore (work already persisted to storage.session)
   }
+}
+
+// (Re)arm the idle/no-progress timeout for an in-flight ask: abort if no token arrives
+// within `sec` seconds. Reset on every token so a healthy long stream isn't cut off.
+function armTimeout(ask, sec) {
+  clearTimeout(ask.abortTimer);
+  ask.abortTimer = setTimeout(() => { ask.abortReason = "timeout"; ask.abort.abort(); }, Math.max(1, sec) * 1000);
 }
 
 function dedupLines(lines) {

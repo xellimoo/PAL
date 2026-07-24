@@ -104,10 +104,13 @@ main {
 .a > :last-child { margin-bottom: 0; }
 .empty { color: #9aa0ad; text-align: center; margin-top: 40px; }
 .status {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 6px 12px; font-size: 12px; color: #6b7280;
   background: #f3f1ea; border-top: 1px solid #e7e4dd;
 }
 .status.error { color: #b91c1c; background: #fef2f2; }
+.status-abort { border: none; background: none; color: #9aa0ad; cursor: pointer; font-size: 12px; padding: 0 2px; flex-shrink: 0; }
+.status-abort:hover { color: #b91c1c; }
 .inittab {
   padding: 4px 12px; font-size: 11px; color: #6b7280;
   background: #f3f1ea; border-top: 1px solid #e7e4dd;

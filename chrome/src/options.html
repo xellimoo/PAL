@@ -64,6 +64,10 @@
         <input id="maxTokens" type="number" value="65536" />
       </section>
       <section>
+        <label>LLM response timeout (seconds) — abort if no token arrives for this long</label>
+        <input id="llmTimeoutSec" type="number" value="60" min="1" />
+      </section>
+      <section>
         <label>Context threshold (tokens) — full transcript at/under this, else window+summary</label>
         <input id="contextThreshold" type="number" value="120000" />
       </section>
@@ -87,6 +91,10 @@
           never your key, question, answer, transcript, or screenshot, and nothing is
           sent anywhere.</p>
       </section>
+      <div class="actions">
+        <button id="saveAdvanced">Save Advanced</button>
+        <span id="savedAdvanced" class="saved hidden">Saved ✓</span>
+      </div>
     </details>
 
     <section>
