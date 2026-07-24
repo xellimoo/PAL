@@ -167,10 +167,16 @@ function setStatus(text, isError) {
     statusEl.classList.add("hidden");
     return;
   }
-  statusEl.textContent = text;
+  $("status-text").textContent = text; // write into the span, not the whole bar (keeps the Abort button)
   statusEl.classList.toggle("error", !!isError);
   statusEl.classList.remove("hidden");
 }
+// Cancel the in-flight question (no confirmation): the SW aborts the fetch; the
+// ASK_ABORTED reply restores the question to the input and clears attachments.
+$("abortask").addEventListener("click", async () => {
+  const tab = await getTargetTab();
+  if (tab) send({ type: "ABORT_ASK", tabId: tab.id });
+});
 
 function showScrub(text) {
   $("scrubprog").textContent = text;
@@ -305,6 +311,8 @@ function refreshTurnState() {
     const aActions = turn.querySelector(".a-actions");
     if (aActions) aActions.classList.toggle("hidden", streaming);
   }
+  // The Abort button is shown for the whole in-flight period (activeAnswerEl set).
+  $("abortask").classList.toggle("hidden", !activeAnswerEl);
 }
 
 function onMessage(msg) {
@@ -456,6 +464,31 @@ function onMessage(msg) {
       activeAnswerEl = null;
       refreshTurnState();
       break;
+    case "ASK_ABORTED": {
+      // Abort button or idle timeout — drop the in-flight turn and restore the question.
+      const turn = activeAnswerEl?.parentElement;
+      const q = turn?.querySelector(".q")?.textContent || "";
+      if (turn) turn.remove();
+      activeAnswerEl = null;
+      activeRaw = "";
+      askBtn.disabled = false;
+      if (q) {
+        promptEl.value = q;
+        chrome.storage.session.set({ [draftKey]: q }); // survive popup close/reopen
+        promptEl.focus();
+      }
+      clearAttachments();
+      if (!log.querySelector(".turn")) {
+        const e = document.createElement("div");
+        e.className = "empty";
+        e.textContent = "Pause on a moment, then ask a question about it.";
+        log.append(e);
+        $("exportqa").classList.add("hidden");
+      }
+      refreshTurnState();
+      setStatus(msg.reason === "timeout" ? "Timed out — no progress. Your question is back in the input." : "Cancelled. Your question is back in the input.", msg.reason === "timeout");
+      break;
+    }
   }
 }
 

@@ -67,6 +67,7 @@ async function load() {
   activeProfileId = settings.activeProfileId || (profiles[0] && profiles[0].id) || null;
 
   $("maxTokens").value = settings.maxTokens ?? 65536;
+  $("llmTimeoutSec").value = settings.llmTimeoutSec ?? 60;
   $("contextThreshold").value = settings.contextThreshold ?? 120000;
   $("windowMinutes").value = settings.windowMinutes ?? 10;
   $("captionScrub").checked = settings.captionScrub !== false;
@@ -161,6 +162,7 @@ async function persistGlobals() {
       ...(vt_settings || {}),
       activeProfileId,
       maxTokens: Number($("maxTokens").value) || 65536,
+      llmTimeoutSec: Number($("llmTimeoutSec").value) || 60,
       contextThreshold: Number($("contextThreshold").value) || 120000,
       windowMinutes: Number($("windowMinutes").value) || 10,
       captionScrub: $("captionScrub").checked,
@@ -263,6 +265,14 @@ $("spec").addEventListener("change", applySpecHint);
 $("save").addEventListener("click", save);
 $("addProfile").addEventListener("click", clearForm);
 $("cancelProfile").addEventListener("click", hideForm);
+// Advanced settings have their own Save (they apply to all profiles and used to only
+// persist as a side-effect of saving a provider profile).
+$("saveAdvanced").addEventListener("click", async () => {
+  await persistGlobals();
+  const s = $("savedAdvanced");
+  s.classList.remove("hidden");
+  setTimeout(() => s.classList.add("hidden"), 1200);
+});
 
 // --- Cached transcript management ---
 async function refreshCacheInfo() {
