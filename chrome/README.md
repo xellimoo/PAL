@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.17**.
+Current version: **0.8.18**.
 
 ## What it does
 
@@ -451,6 +451,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.17** — A new list button above the attach-clip button opens a question navigator —
   click any past question to jump to it in the chat. Deleting a question now also
   decrements the token meter's question count.
+- **0.8.18** — Resetting a conversation now also clears the token meter's question count
+  (it stays hidden until you ask again, then shows 1Q).
 
 ## Disclaimer
 
