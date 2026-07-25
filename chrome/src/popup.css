@@ -133,8 +133,10 @@ footer {
 }
 .prompt-row { display: flex; gap: 6px; align-items: stretch; }
 .attach-col { display: flex; flex-direction: column; gap: 4px; align-self: flex-end; }
-/* Question-list navigator popover (anchored just above the footer). */
-#qlist-pop {
+.stash-col { display: flex; flex-direction: column; gap: 2px; }
+.stash-col .icon-btn { height: auto; flex: 1 1 0; min-width: 26px; }
+/* List popovers (anchored just above the footer). */
+#qlist-pop, #stash-pop {
   position: absolute; left: 0; right: 0; bottom: 100%;
   max-height: 45vh; overflow-y: auto;
   background: #fff; border: 1px solid #d7d3c9; border-radius: 10px;

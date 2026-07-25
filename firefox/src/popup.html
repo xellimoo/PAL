@@ -76,6 +76,7 @@
 
     <footer>
       <div id="qlist-pop" class="hidden" role="dialog" aria-label="Jump to a question"></div>
+      <div id="stash-pop" class="hidden" role="dialog" aria-label="Stashed questions"></div>
       <div id="attach-preview" class="hidden"></div>
       <div class="prompt-row">
         <div class="attach-col">
@@ -87,6 +88,14 @@
           </button>
         </div>
         <textarea id="prompt" rows="2" placeholder="Ask about what's on screen…"></textarea>
+        <div class="stash-col">
+          <button id="stashq" class="icon-btn" title="View stashed questions">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+          </button>
+          <button id="stash" class="icon-btn" title="Stash this question for later">
+            <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M8 7l4 4 4-4"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>
+          </button>
+        </div>
         <button id="ask" disabled>Ask</button>
       </div>
       <input type="file" id="file-input" accept="image/*,.txt,.md,.markdown,.csv,.json,.xml,.yaml,.yml,.log,.ini,.cfg,.conf,.tsv,.htm,.html,.css,.js,.ts,.py,.rb,.go,.rs,.java,.c,.cpp,.h,.sh,.sql" multiple class="hidden" />

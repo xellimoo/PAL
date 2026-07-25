@@ -19,6 +19,8 @@ const MAX_ATTACHMENTS = 3; // cap on total attachments (images + text files) per
 let attachedFiles = []; // [{ kind:"image", b64, url } | { kind:"text", content, name }]
 let draftKey = "vt_draft_global"; // per-tab key for the unsent question draft
 let attachKey = "vt_attach_global"; // per-tab key for the unsent attachments
+let stashKey = "vt_stash_global"; // per-tab key for stashed (save-for-later) questions
+let stashed = []; // in-memory mirror of vt_stash_<tabId>
 let llmOriginPattern = null; // cached from settings, for runtime host permission
 let currentMode = "video"; // "video" or "plain" — persisted in chrome.storage.local
 
@@ -584,8 +586,10 @@ document.addEventListener("click", (e) => {
 
 // --- Question-list navigator (jump to a past question) ---
 const qlistPop = $("qlist-pop");
+const stashPop = $("stash-pop");
 $("qlist").addEventListener("click", (e) => {
   e.stopPropagation(); // don't let the click-outside handler re-close it
+  stashPop.classList.add("hidden"); // only one list popover open at a time
   if (qlistPop.classList.contains("hidden")) renderQList();
   qlistPop.classList.toggle("hidden");
 });
@@ -626,6 +630,66 @@ function renderQList() {
       setTimeout(() => turn.classList.remove("jump-highlight"), 1200);
     });
     qlistPop.append(row);
+  });
+}
+
+// --- Stashed questions (save a question for later, restore it from a list) ---
+function saveStash() {
+  if (stashed.length) chrome.storage.session.set({ [stashKey]: stashed });
+  else chrome.storage.session.remove(stashKey);
+}
+$("stash").addEventListener("click", () => {
+  const q = promptEl.value.trim();
+  if (!q) { setStatus("Type a question to stash."); return; }
+  stashed.push(q);
+  saveStash();
+  promptEl.value = "";
+  chrome.storage.session.remove(draftKey); // the question moved into the stash
+  setStatus("Stashed.");
+});
+$("stashq").addEventListener("click", (e) => {
+  e.stopPropagation();
+  qlistPop.classList.add("hidden"); // only one list popover open at a time
+  if (stashPop.classList.contains("hidden")) renderStash();
+  stashPop.classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (stashPop.classList.contains("hidden")) return;
+  if (stashPop.contains(e.target) || e.target === $("stashq")) return;
+  stashPop.classList.add("hidden");
+});
+// Rebuild the stash list each open; clicking a row moves that question to the input.
+function renderStash() {
+  stashPop.innerHTML = "";
+  if (!stashed.length) {
+    const empty = document.createElement("div");
+    empty.className = "qlist-empty";
+    empty.textContent = "No stashed questions.";
+    stashPop.append(empty);
+    return;
+  }
+  stashed.forEach((q, i) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "qlist-item";
+    row.title = q;
+    const num = document.createElement("span");
+    num.className = "qlist-num";
+    num.textContent = `#${i + 1}`;
+    const txt = document.createElement("span");
+    txt.className = "qlist-text";
+    txt.textContent = q;
+    row.append(num, txt);
+    row.addEventListener("click", () => {
+      stashed.splice(i, 1);
+      saveStash();
+      promptEl.value = q;
+      chrome.storage.session.set({ [draftKey]: q }); // survive popup close/reopen
+      promptEl.focus();
+      stashPop.classList.add("hidden");
+      setStatus("Loaded from stash — press Ask when ready.");
+    });
+    stashPop.append(row);
   });
 }
 
@@ -995,8 +1059,9 @@ document.addEventListener("drop", async (e) => {
   if (tab) {
     draftKey = `vt_draft_${tab.id}`;
     attachKey = `vt_attach_${tab.id}`;
+    stashKey = `vt_stash_${tab.id}`;
     const key = `vt_hist_${tab.id}`;
-    const store = await chrome.storage.session.get([key, draftKey, attachKey]);
+    const store = await chrome.storage.session.get([key, draftKey, attachKey, stashKey]);
     const hist = store[key] || [];
     for (const t of hist) {
       const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
@@ -1013,6 +1078,7 @@ document.addEventListener("drop", async (e) => {
       );
       renderAttachChips();
     }
+    stashed = Array.isArray(store[stashKey]) ? store[stashKey] : [];
   }
   promptEl.focus();
   if (!log.children.length) {
