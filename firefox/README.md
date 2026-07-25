@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.19**.
+Current version: **0.8.20**.
 
 ## What it does
 
@@ -450,6 +450,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   status line that cancels the current question and puts it back in the input. The
   Advanced settings section also gets its own Save button (it previously only saved via
   a provider profile's Save).
+- **0.8.20** — The token meter's question count is now per-tab (it was a global tally
+  that carried across pages): each tab starts at 0, counts only that tab's questions,
+  drops to 0 on reset, and decreases when you delete one.
 
 ## Disclaimer
 
