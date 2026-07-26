@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.21**.
+Current version: **0.8.22**.
 
 ## What it does
 
@@ -460,6 +460,8 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.21** — **Stash**: a new button left of Ask saves the current question for later;
   the button above it opens the stash list — click any stashed question to load it back
   into the input. Stashed questions are saved per tab for the session.
+- **0.8.22** — Each item in the question list (the list above the attach-clip button) has a
+  delete button — same as deleting from the chat, it removes that question and its answer.
 
 ## Disclaimer
 

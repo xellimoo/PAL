@@ -612,8 +612,7 @@ function renderQList() {
   }
   turns.forEach((turn, i) => {
     const q = turn.querySelector(".q")?.textContent || "(question)";
-    const row = document.createElement("button");
-    row.type = "button";
+    const row = document.createElement("div");
     row.className = "qlist-item";
     row.title = q;
     const num = document.createElement("span");
@@ -629,6 +628,16 @@ function renderQList() {
       turn.classList.add("jump-highlight");
       setTimeout(() => turn.classList.remove("jump-highlight"), 1200);
     });
+    // Delete (same logic as the per-question bin button). Disabled while streaming.
+    const del = bubbleBtn(DEL_SVG, "Delete this question and its answer");
+    del.classList.add("del-turn");
+    del.disabled = turn.querySelector(".a") === activeAnswerEl;
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await deleteTurnEl(turn);
+      renderQList(); // a turn was removed — refresh the list
+    });
+    row.append(del);
     qlistPop.append(row);
   });
 }

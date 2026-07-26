@@ -150,7 +150,7 @@ footer {
 }
 .qlist-item:hover { background: #f3f1ea; }
 .qlist-num { color: #6b7280; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.qlist-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qlist-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turn.jump-highlight .q { animation: jumpFlash 1.2s ease-out; }
 @keyframes jumpFlash { 0%,30% { box-shadow: 0 0 0 3px #2563eb66; } 100% { box-shadow: 0 0 0 0 transparent; } }
 footer textarea {
