@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.22**.
+Current version: **0.8.23**.
 
 ## What it does
 
@@ -462,6 +462,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   into the input. Stashed questions are saved per tab for the session.
 - **0.8.22** — Each item in the question list (the list above the attach-clip button) has a
   delete button — same as deleting from the chat, it removes that question and its answer.
+- **0.8.23** — Stashing a question appends the video's current timestamp (e.g.
+  `question [01:12:25]`). The question & stash lists use a larger, vertically-centered
+  font; stashed questions each have a delete button and, when long, truncate while keeping
+  the `[timestamp]` visible.
 
 ## Disclaimer
 

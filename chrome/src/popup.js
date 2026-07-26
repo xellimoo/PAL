@@ -647,14 +647,43 @@ function saveStash() {
   if (stashed.length) chrome.storage.session.set({ [stashKey]: stashed });
   else chrome.storage.session.remove(stashKey);
 }
-$("stash").addEventListener("click", () => {
+// Format seconds as HH:MM:SS (mirrors lib/context.js fmt, used for the video timestamp).
+function fmtTs(t) {
+  t = Math.max(0, Math.floor(t || 0));
+  const h = String(Math.floor(t / 3600)).padStart(2, "0");
+  const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
+  const s = String(t % 60).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+// Read the target tab's main <video> currentTime and return "[HH:MM:SS]", or "" when
+// there is no video or no host access (Plain mode / non-video page). No pause or
+// capture — just the playback position at stash time.
+async function currentVideoTs() {
+  try {
+    const tab = await getTargetTab();
+    if (!tab?.id) return "";
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const v = document.querySelector("video");
+        return v && typeof v.currentTime === "number" && isFinite(v.currentTime) ? v.currentTime : null;
+      },
+    });
+    const t = r?.result;
+    return typeof t === "number" && isFinite(t) ? `[${fmtTs(t)}]` : "";
+  } catch {
+    return "";
+  }
+}
+$("stash").addEventListener("click", async () => {
   const q = promptEl.value.trim();
   if (!q) { setStatus("Type a question to stash."); return; }
-  stashed.push(q);
+  const ts = await currentVideoTs(); // "[HH:MM:SS]" appended when a video is present
+  stashed.push(ts ? `${q} ${ts}` : q);
   saveStash();
   promptEl.value = "";
   chrome.storage.session.remove(draftKey); // the question moved into the stash
-  setStatus("Stashed.");
+  setStatus(ts ? `Stashed ${ts}.` : "Stashed.");
 });
 $("stashq").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -677,11 +706,14 @@ function renderStash() {
     stashPop.append(empty);
     return;
   }
-  stashed.forEach((q, i) => {
-    const row = document.createElement("button");
-    row.type = "button";
+  stashed.forEach((item, i) => {
+    // Split a trailing [HH:MM:SS] so it stays visible when the question text truncates.
+    const m = item.match(/^(.*?)\s*(\[\d{1,2}:\d{2}:\d{2}\])$/);
+    const q = m ? m[1] : item;
+    const ts = m ? m[2] : "";
+    const row = document.createElement("div");
     row.className = "qlist-item";
-    row.title = q;
+    row.title = item;
     const num = document.createElement("span");
     num.className = "qlist-num";
     num.textContent = `#${i + 1}`;
@@ -689,15 +721,31 @@ function renderStash() {
     txt.className = "qlist-text";
     txt.textContent = q;
     row.append(num, txt);
+    if (ts) {
+      const tsEl = document.createElement("span");
+      tsEl.className = "qlist-ts";
+      tsEl.textContent = ts;
+      row.append(tsEl);
+    }
     row.addEventListener("click", () => {
       stashed.splice(i, 1);
       saveStash();
-      promptEl.value = q;
-      chrome.storage.session.set({ [draftKey]: q }); // survive popup close/reopen
+      promptEl.value = item; // full text, including the timestamp
+      chrome.storage.session.set({ [draftKey]: item }); // survive popup close/reopen
       promptEl.focus();
       stashPop.classList.add("hidden");
       setStatus("Loaded from stash — press Ask when ready.");
     });
+    // Delete this stashed question (without loading it).
+    const del = bubbleBtn(DEL_SVG, "Delete this stashed question");
+    del.classList.add("del-turn");
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      stashed.splice(i, 1);
+      saveStash();
+      renderStash();
+    });
+    row.append(del);
     stashPop.append(row);
   });
 }

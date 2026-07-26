@@ -144,13 +144,14 @@ footer {
 }
 .qlist-empty { padding: 10px; font-size: 12px; color: #9aa0ad; text-align: center; }
 .qlist-item {
-  display: flex; gap: 8px; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   background: none; border: none; padding: 6px 8px; border-radius: 6px;
-  cursor: pointer; font: inherit; font-size: 12px; color: #1f2330;
+  cursor: pointer; font: inherit; font-size: 13px; color: #1f2330;
 }
 .qlist-item:hover { background: #f3f1ea; }
 .qlist-num { color: #6b7280; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .qlist-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qlist-ts { flex-shrink: 0; color: #6b7280; font-variant-numeric: tabular-nums; }
 .turn.jump-highlight .q { animation: jumpFlash 1.2s ease-out; }
 @keyframes jumpFlash { 0%,30% { box-shadow: 0 0 0 3px #2563eb66; } 100% { box-shadow: 0 0 0 0 transparent; } }
 footer textarea {
