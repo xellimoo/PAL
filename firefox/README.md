@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.23**.
+Current version: **0.8.24**.
 
 ## What it does
 
@@ -462,6 +462,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   `question [01:12:25]`). The question & stash lists use a larger, vertically-centered
   font; stashed questions each have a delete button and, when long, truncate while keeping
   the `[timestamp]` visible.
+- **0.8.24** — Q&A history is now durable and uncapped: keyed per video/page (survives a
+  browser restart and reloads when you revisit the same video), stored locally, and never
+  auto-truncated. Added the `unlimitedStorage` permission, an Options "Clear all Q&A
+  history" button, and a near-full storage warning that prompts you to export.
 
 ## Disclaimer
 

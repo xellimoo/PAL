@@ -27,6 +27,7 @@ button {
   padding: 9px 20px; font-weight: 600; cursor: pointer; font-size: 14px;
 }
 button.secondary { background: #e7e4dd; color: #1f2330; }
+#clearcache, #clearqa { margin-top: 8px; } /* match the "+ Add profile" button's spacing */
 .saved { color: #15803d; font-weight: 600; }
 .err { color: #b91c1c; }
 .hidden { display: none !important; }

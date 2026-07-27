@@ -5,6 +5,7 @@
 import { decryptSecret } from "./lib/crypto.js";
 import { buildRequest, streamText } from "./lib/adapters.js";
 import { buildSystemPrompt, fmt } from "./lib/context.js";
+import { loadHist, saveHist } from "./lib/keys.js";
 
 // Decrypted keys cached for the browser session, one per profile so switching
 // providers (or closing/reopening the popup) doesn't re-prompt. Backed by
@@ -290,7 +291,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
-    const priorTurns = await getHistory(tab.id);
+    const priorTurns = await loadHist(tab);
     const history = [];
     for (const t of priorTurns.slice(-8)) {
       history.push({ role: "user", text: t.q });
@@ -627,7 +628,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     }
     clearTimeout(ask.abortTimer); // completed normally — cancel the idle timer
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(tab.id, prompt, ask.full, userImages?.length ? userImages : undefined);
+    await appendHistory(tab, prompt, ask.full, userImages?.length ? userImages : undefined);
     activeAsks.delete(tab.id);
     chrome.storage.session.remove(progKey).catch(() => {});
 
@@ -1001,17 +1002,10 @@ async function addUsage(turn) {
   return t;
 }
 
-async function getHistory(tabId) {
-  const key = `vt_hist_${tabId}`;
-  const store = await chrome.storage.session.get(key);
-  return store[key] || [];
-}
-
-async function appendHistory(tabId, q, a, imgs) {
-  const key = `vt_hist_${tabId}`;
-  const arr = await getHistory(tabId);
+async function appendHistory(tab, q, a, imgs) {
+  const arr = await loadHist(tab);
   arr.push({ q, a, t: Date.now(), ...(imgs?.length ? { imgs } : {}) });
-  await chrome.storage.session.set({ [key]: arr.slice(-20) });
+  await saveHist(tab, arr); // durable (chrome.storage.local), no cap — keeps every question
 }
 
 // Capture the visible tab (device-pixel res) and crop to the CSS rect scaled by dpr.

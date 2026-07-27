@@ -2,6 +2,7 @@
 // answer keeps streaming/finishing even if this popup closes (corrected-spec §1).
 
 import { renderMarkdown } from "./lib/markdown.js";
+import { loadHist, saveHist, removeHist } from "./lib/keys.js";
 
 const $ = (id) => document.getElementById(id);
 const log = $("log");
@@ -275,13 +276,10 @@ async function deleteTurnEl(wrap) {
   if (index === -1) return;
   const tab = await getTargetTab();
   if (tab) {
-    const key = `vt_hist_${tab.id}`;
-    const store = await chrome.storage.session.get(key);
-    const arr = store[key] || [];
+    const arr = await loadHist(tab);
     if (index < arr.length) {
       arr.splice(index, 1);
-      if (arr.length) await chrome.storage.session.set({ [key]: arr });
-      else await chrome.storage.session.remove(key);
+      await saveHist(tab, arr);
     }
   }
   wrap.remove();
@@ -757,8 +755,7 @@ function renderStash() {
 async function exportQA() {
   const tab = await getTargetTab();
   if (!tab) { setStatus("No active tab to export from.", true); return; }
-  const key = `vt_hist_${tab.id}`;
-  const hist = (await chrome.storage.session.get(key))[key] || [];
+  const hist = await loadHist(tab);
   if (!hist.length) { setStatus("No questions to export yet.", true); return; }
   await ensureAccess(tab, false);
 
@@ -913,7 +910,7 @@ $("resetchat").addEventListener("click", async () => {
   if (!confirm("Reset conversation? This clears all Q&A for this tab.")) return;
   const tab = await getTargetTab();
   if (tab) {
-    await chrome.storage.session.remove(`vt_hist_${tab.id}`);
+    await removeHist(tab);
   }
   log.innerHTML = "";
   const e = document.createElement("div");
@@ -1117,9 +1114,8 @@ document.addEventListener("drop", async (e) => {
     draftKey = `vt_draft_${tab.id}`;
     attachKey = `vt_attach_${tab.id}`;
     stashKey = `vt_stash_${tab.id}`;
-    const key = `vt_hist_${tab.id}`;
-    const store = await chrome.storage.session.get([key, draftKey, attachKey, stashKey]);
-    const hist = store[key] || [];
+    const store = await chrome.storage.session.get([draftKey, attachKey, stashKey]);
+    const hist = await loadHist(tab);
     for (const t of hist) {
       const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
       aEl.rawA = t.a;
@@ -1152,4 +1148,12 @@ document.addEventListener("drop", async (e) => {
   renderTokens(usage); // turns already loaded into #log above → count is this tab's
   // Reattach to an answer that was streaming when the popup closed/reopened.
   if (tab?.id != null) send({ type: "RESUME_ASK", tabId: tab.id });
+  // Advisory: if local storage is nearly full (95% of the standard quota), nudge the user
+  // to export + clear. unlimitedStorage prevents any hard failure — this is just a prompt.
+  try {
+    const bytes = await chrome.storage.local.getBytesInUse(null);
+    if (bytes >= 0.95 * chrome.storage.local.QUOTA_BYTES) {
+      setStatus(`⚠ Storage nearly full (~${Math.round(bytes / 1048576)} MB) — export your Q&A (⤓) and clear old chats (Options).`, true);
+    }
+  } catch {}
 })();

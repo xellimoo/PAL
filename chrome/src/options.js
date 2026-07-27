@@ -295,9 +295,36 @@ async function refreshCacheInfo() {
 $("clearcache").addEventListener("click", async () => {
   const keys = await refreshCacheInfo();
   if (!keys.length) return;
+  if (!confirm("Clear ALL cached transcripts? This cannot be undone.")) return;
   await chrome.storage.local.remove(keys);
   await refreshCacheInfo();
 });
 
+// --- Q&A history management (durable, per video/page) ---
+async function refreshQaInfo() {
+  const all = await chrome.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith("vt_qa_"));
+  let bytes = 0;
+  try { bytes = await chrome.storage.local.getBytesInUse(keys); } catch {}
+  const conv = keys.reduce((n, k) => n + (Array.isArray(all[k]) ? all[k].length : 0), 0);
+  let txt = `${keys.length} video/page(s), ${conv} conversation(s)` + (bytes ? `, ~${Math.round(bytes / 1024)} KB` : "") + ".";
+  // Advisory near-full nudge (unlimitedStorage = no hard cap; this just prompts export + clear).
+  let total = 0;
+  try { total = await chrome.storage.local.getBytesInUse(null); } catch {}
+  if (total >= 0.95 * chrome.storage.local.QUOTA_BYTES) {
+    txt += " ⚠ Nearly full — export your Q&A (⤓ in the popup) and clear old conversations.";
+  }
+  $("qainfo").textContent = txt;
+  return keys;
+}
+$("clearqa").addEventListener("click", async () => {
+  const keys = await refreshQaInfo();
+  if (!keys.length) return;
+  if (!confirm("Clear ALL Q&A history? This cannot be undone.")) return;
+  await chrome.storage.local.remove(keys);
+  await refreshQaInfo();
+});
+
 load();
 refreshCacheInfo();
+refreshQaInfo();

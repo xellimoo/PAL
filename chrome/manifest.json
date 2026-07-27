@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "PAL — Pause, Ask, Learn",
-  "version": "0.8.23",
+  "version": "0.8.24",
   "description": "Pause a video, ask your own AI about the moment, and learn. Context-aware tutor; bring your own key (OpenAI/Anthropic/Gemini).",
   "homepage_url": "https://github.com/xellimoo/PAL",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
+    "unlimitedStorage",
     "notifications"
   ],
   "optional_host_permissions": [
