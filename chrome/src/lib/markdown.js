@@ -10,6 +10,11 @@ import temml from "./temml.mjs";
 const TA = "";
 const TB = "";
 
+// Inline-code placeholder delimiters (distinct from the math TA/TB pair at U+E000/1):
+// used to pull `code` spans out before emphasis so `_`/`*` inside them stay literal.
+const CA = "";
+const CB = "";
+
 function esc(s) {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
@@ -24,15 +29,19 @@ function renderMath(tex, display) {
 
 function inline(s) {
   s = esc(s);
-  s = s.replace(/`([^`]+)`/g, (m, c) => `<code>${c}</code>`);
+  // Pull inline code out into placeholders BEFORE emphasis, so `_`/`*` inside `code`
+  // stay literal (e.g. `n_embd` must not italicize). Restored after the passes below.
+  const codes = [];
+  s = s.replace(/`([^`]+)`/g, (m, c) => `${CA}${codes.push(c) - 1}${CB}`);
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^\w])__([^_]+)__(?!\w)/g, "$1<strong>$2</strong>");
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  s = s.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
+  s = s.replace(/(^|[^\w])_([^_\n]+)_(?!\w)/g, "$1<em>$2</em>");
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
     const safe = /^https?:\/\//i.test(u) ? u : "#";
     return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${t}</a>`;
   });
+  s = s.replace(new RegExp(`${CA}(\\d+)${CB}`, "g"), (m, i) => `<code>${codes[Number(i)]}</code>`);
   return s;
 }
 
