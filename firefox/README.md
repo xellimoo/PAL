@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.24**.
+Current version: **0.8.25**.
 
 ## What it does
 
@@ -466,6 +466,11 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   browser restart and reloads when you revisit the same video), stored locally, and never
   auto-truncated. Added the `unlimitedStorage` permission, an Options "Clear all Q&A
   history" button, and a near-full storage warning that prompts you to export.
+- **0.8.25** — Detached-window fixes: questions asked on a page without site access were
+  stored under a per-tab key and vanished on reopen — the popup now derives and passes the
+  history key to the service worker (orphans recovered). Asking on a tab PAL can't read now
+  guides you to reopen the detached window to grant access, instead of sending a
+  context-less "on ?" query; the detailed "Asking…" status returns once access is granted.
 
 ## Disclaimer
 

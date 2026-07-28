@@ -2,7 +2,7 @@
 // answer keeps streaming/finishing even if this popup closes (corrected-spec §1).
 
 import { renderMarkdown } from "./lib/markdown.js";
-import { loadHist, saveHist, removeHist } from "./lib/keys.js";
+import { histKeyForTab, loadHist, saveHist, removeHist } from "./lib/keys.js";
 
 const $ = (id) => document.getElementById(id);
 const log = $("log");
@@ -276,10 +276,10 @@ async function deleteTurnEl(wrap) {
   if (index === -1) return;
   const tab = await getTargetTab();
   if (tab) {
-    const arr = await loadHist(tab);
+    const arr = await loadHist(histKeyForTab(tab), tab.id);
     if (index < arr.length) {
       arr.splice(index, 1);
-      await saveHist(tab, arr);
+      await saveHist(histKeyForTab(tab), arr);
     }
   }
   wrap.remove();
@@ -483,7 +483,12 @@ function onMessage(msg) {
         $("exportqa").classList.add("hidden");
       }
       refreshTurnState();
-      setStatus(msg.reason === "timeout" ? "Timed out — no progress. Your question is back in the input." : "Cancelled. Your question is back in the input.", msg.reason === "timeout");
+      setStatus(
+        msg.reason === "no_access" ? "No site access. Reopen this detached window from the page (PAL icon → ⧉) to grant access to this site, then Ask again."
+          : msg.reason === "timeout" ? "Timed out — no progress. Your question is back in the input."
+          : "Cancelled. Your question is back in the input.",
+        msg.reason === "timeout"
+      );
       break;
     }
   }
@@ -493,14 +498,25 @@ async function ask() {
   const prompt = promptEl.value.trim();
   if (!prompt) return;
   const tab = await getTargetTab();
+  // The detached window can't read a page it hasn't been granted host access to
+  // (activeTab doesn't cover the target). If the site origin isn't granted, block here
+  // — don't consume the question — and guide the user to re-detach to grant it, so we
+  // never send a context-less query the SW would render as "on ?".
+  if (DETACHED && currentMode === "video") {
+    const siteOrigin = tab?.url ? originPattern(tab.url) : null;
+    const granted = siteOrigin && (await chrome.permissions.contains({ origins: [siteOrigin] }));
+    if (!granted) {
+      setStatus("No site access. Reopen this detached window from the page (PAL icon → ⧉) to grant access to this site, then Ask again.");
+      return;
+    }
+  }
   // Ask for host access before doing anything that would lose the typed question.
   if (!(await ensureAccess(tab, true))) {
-    setStatus(
-      DETACHED
-        ? "Site access is required. Right-click the PAL browser icon and choose 'Always Allow on [this site]', then retry."
-        : "Site access is required (your AI endpoint). Click Ask to grant it.",
-      true
-    );
+    if (DETACHED) {
+      setStatus("No site access. Reopen this detached window from the page (PAL icon → ⧉) to grant access to this site, then Ask again.");
+    } else {
+      setStatus("Site access is required (your AI endpoint). Click Ask to grant it.", true);
+    }
     return;
   }
   promptEl.value = "";
@@ -515,7 +531,7 @@ async function ask() {
   activeRaw = "";
   setStatus("Working…");
   send({
-    type: "ASK", prompt, tabId: tab?.id, mode: currentMode,
+    type: "ASK", prompt, tabId: tab?.id, histKey: histKeyForTab(tab), mode: currentMode,
     userImages: attachedFiles.filter((a) => a.kind === "image").map((a) => a.b64),
     attachedTexts: attachedTexts.length ? attachedTexts : undefined,
     windowId: tab?.windowId,
@@ -755,7 +771,7 @@ function renderStash() {
 async function exportQA() {
   const tab = await getTargetTab();
   if (!tab) { setStatus("No active tab to export from.", true); return; }
-  const hist = await loadHist(tab);
+  const hist = await loadHist(histKeyForTab(tab), tab.id);
   if (!hist.length) { setStatus("No questions to export yet.", true); return; }
   await ensureAccess(tab, false);
 
@@ -910,7 +926,7 @@ $("resetchat").addEventListener("click", async () => {
   if (!confirm("Reset conversation? This clears all Q&A for this tab.")) return;
   const tab = await getTargetTab();
   if (tab) {
-    await removeHist(tab);
+    await removeHist(histKeyForTab(tab));
   }
   log.innerHTML = "";
   const e = document.createElement("div");
@@ -1115,7 +1131,7 @@ document.addEventListener("drop", async (e) => {
     attachKey = `vt_attach_${tab.id}`;
     stashKey = `vt_stash_${tab.id}`;
     const store = await chrome.storage.session.get([draftKey, attachKey, stashKey]);
-    const hist = await loadHist(tab);
+    const hist = await loadHist(histKeyForTab(tab), tab.id);
     for (const t of hist) {
       const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
       aEl.rawA = t.a;

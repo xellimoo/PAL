@@ -133,7 +133,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts, msg.mode);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts, msg.mode, msg.histKey);
       return;
     }
 
@@ -250,7 +250,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
+async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode, histKey) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -280,6 +280,12 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
       [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     }
     if (!tab) throw new Error("No video tab found.");
+    // No host access (can't read the URL) — the popup should have blocked this. Don't
+    // run a context-less query; surface the reopen guide and stop (any mode).
+    if (!tab.url) {
+      safePost(port, { type: "ASK_ABORTED", reason: "no_access" });
+      return;
+    }
 
     // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
     // setup — so a popup that closed right after Ask and reopens during setup can
@@ -291,7 +297,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
-    const priorTurns = await loadHist(tab);
+    const priorTurns = await loadHist(histKey, tabId);
     const history = [];
     for (const t of priorTurns.slice(-8)) {
       history.push({ role: "user", text: t.q });
@@ -628,7 +634,7 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode) {
     }
     clearTimeout(ask.abortTimer); // completed normally — cancel the idle timer
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(tab, prompt, ask.full, userImages?.length ? userImages : undefined);
+    await appendHistory(histKey, tabId, prompt, ask.full, userImages?.length ? userImages : undefined);
     activeAsks.delete(tab.id);
     chrome.storage.session.remove(progKey).catch(() => {});
 
@@ -1002,10 +1008,10 @@ async function addUsage(turn) {
   return t;
 }
 
-async function appendHistory(tab, q, a, imgs) {
-  const arr = await loadHist(tab);
+async function appendHistory(histKey, tabId, q, a, imgs) {
+  const arr = await loadHist(histKey, tabId);
   arr.push({ q, a, t: Date.now(), ...(imgs?.length ? { imgs } : {}) });
-  await saveHist(tab, arr); // durable (chrome.storage.local), no cap — keeps every question
+  await saveHist(histKey, arr); // durable (chrome.storage.local), no cap — keeps every question
 }
 
 // Capture the visible tab (device-pixel res) and crop to the CSS rect scaled by dpr.

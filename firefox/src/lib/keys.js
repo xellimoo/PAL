@@ -43,13 +43,22 @@ export function histKeyForTab(tab) {
 
 // Read this tab's history from local storage. On first access after the upgrade, migrates
 // the legacy vt_hist_<tabId> (session) into the new local key. Returns [] if none.
-export async function loadHist(tab) {
-  const key = histKeyForTab(tab);
+export async function loadHist(key, tabId) {
   if (!key) return [];
   const cur = (await chrome.storage.local.get(key))[key];
   if (Array.isArray(cur)) return cur;
-  if (tab.id != null) {
-    const oldKey = `vt_hist_${tab.id}`;
+  // One-time recovery/migration from legacy keys: the 0.8.24 SW fallback (vt_qa_tab_<id>,
+  // local — written when the SW couldn't see the tab URL) and the pre-0.8.24 per-tab key
+  // (vt_hist_<id>, session). Skipped when `key` is itself the per-tab fallback.
+  if (tabId != null && !key.startsWith("vt_qa_tab_")) {
+    const fbKey = `vt_qa_tab_${tabId}`;
+    const fb = (await chrome.storage.local.get(fbKey))[fbKey];
+    if (Array.isArray(fb) && fb.length) {
+      await chrome.storage.local.set({ [key]: fb });
+      chrome.storage.local.remove(fbKey).catch(() => {});
+      return fb;
+    }
+    const oldKey = `vt_hist_${tabId}`;
     const old = (await chrome.storage.session.get(oldKey))[oldKey];
     if (Array.isArray(old) && old.length) {
       await chrome.storage.local.set({ [key]: old });
@@ -61,15 +70,13 @@ export async function loadHist(tab) {
 }
 
 // Write (or clear) this tab's history to local storage.
-export async function saveHist(tab, arr) {
-  const key = histKeyForTab(tab);
+export async function saveHist(key, arr) {
   if (!key) return;
   if (Array.isArray(arr) && arr.length) await chrome.storage.local.set({ [key]: arr });
   else await chrome.storage.local.remove(key);
 }
 
 // Explicitly clear this tab's history (the per-page Reset action).
-export async function removeHist(tab) {
-  const key = histKeyForTab(tab);
+export async function removeHist(key) {
   if (key) await chrome.storage.local.remove(key);
 }
