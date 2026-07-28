@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.25**.
+Current version: **0.8.26**.
 
 ## What it does
 
@@ -479,6 +479,10 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   history key to the service worker (orphans recovered). Asking on a tab PAL can't read now
   guides you to reopen the detached window to grant access, instead of sending a
   context-less "on ?" query; the detailed "Asking…" status returns once access is granted.
+- **0.8.26** — Video mode: each question bubble shows the `[HH:MM:SS]` timestamp when it
+  was asked (below the question, above thumbnails); export includes it after the question
+  title (`## Q1: question [01:22:51]`). Also: replaced `innerHTML` with
+  `DOMParser`+`replaceChildren` (AMO security compliance).
 
 ## Disclaimer
 

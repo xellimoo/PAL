@@ -172,6 +172,7 @@ footer textarea {
 }
 .q-thumbs { display: flex; gap: 4px; margin: 2px 0; align-self: flex-end; }
 .q-thumb { width: 60px; height: 60px; max-height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #d7d3c9; }
+.q-ts { align-self: flex-end; font-size: 11px; color: #9aa0ad; margin-top: 2px; font-variant-numeric: tabular-nums; }
 /* Per-bubble action row (copy / delete) — sits outside the bubble, right-aligned. */
 .turn-actions { display: flex; justify-content: flex-end; gap: 2px; }
 .bubble-btn {

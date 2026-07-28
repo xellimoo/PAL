@@ -133,7 +133,7 @@ async function handleMessage(msg, port) {
     }
 
     if (msg.type === "ASK") {
-      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts, msg.mode, msg.histKey);
+      runAsk(msg.prompt, msg.tabId, port, msg.userImages, msg.attachedTexts, msg.mode, msg.histKey, msg.ts);
       return;
     }
 
@@ -143,10 +143,10 @@ async function handleMessage(msg, port) {
       const ask = activeAsks.get(msg.tabId);
       if (ask) {
         ask.port = port;
-        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full, ...((ask.imgs ? { imgs: ask.imgs } : {})) });
+        port.postMessage({ type: "ANSWER_RESUME", prompt: ask.prompt, full: ask.full, ts: ask.ts, ...((ask.imgs ? { imgs: ask.imgs } : {})) });
       } else {
         const prog = (await chrome.storage.session.get(`vt_prog_${msg.tabId}`))[`vt_prog_${msg.tabId}`];
-        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true, ...((prog.imgs ? { imgs: prog.imgs } : {})) });
+        if (prog) port.postMessage({ type: "ANSWER_RESUME", prompt: prog.q, full: prog.a, terminated: true, ts: prog.ts, ...((prog.imgs ? { imgs: prog.imgs } : {})) });
       }
       return;
     }
@@ -250,7 +250,7 @@ function isAllowedEndpoint(u) {
   }
 }
 
-async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode, histKey) {
+async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode, histKey, ts) {
   let ask = null; // in-flight entry (set when streaming starts); visible to the catch
   try {
     const settings = await loadSettings();
@@ -290,10 +290,10 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode, hist
     // Set up in-flight tracking + persist the question BEFORE the (potentially slow)
     // setup — so a popup that closed right after Ask and reopens during setup can
     // reattach (RESUME_ASK finds the entry) and the question survives SW termination.
-    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, abort: new AbortController(), abortTimer: null, abortReason: null, ...((userImages?.length) ? { imgs: userImages } : {}) };
+    ask = { prompt, full: "", port, tabId: tab.id, saved: 0, abort: new AbortController(), abortTimer: null, abortReason: null, ts: ts || null, ...((userImages?.length) ? { imgs: userImages } : {}) };
     activeAsks.set(tab.id, ask);
     const progKey = `vt_prog_${tab.id}`;
-    chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
+    chrome.storage.session.set({ [progKey]: { q: prompt, a: "", ts: ts || null, ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
 
     // Prior turns for this tab (oldest first), flattened to role-tagged messages.
     // Capped to the last 8 turns to bound token growth on long sessions.
@@ -629,12 +629,12 @@ async function runAsk(prompt, tabId, port, userImages, attachedTexts, mode, hist
       safePost(ask.port, { type: "TOKEN", text: chunk });
       if (ask.full.length - ask.saved >= 200) {
         ask.saved = ask.full.length;
-        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
+        chrome.storage.session.set({ [progKey]: { q: prompt, a: ask.full, ts: ask.ts, ...((userImages?.length) ? { imgs: userImages } : {}) } }).catch(() => {});
       }
     }
     clearTimeout(ask.abortTimer); // completed normally — cancel the idle timer
     // Persist the final turn so a reopened popup can render it even if it closed.
-    await appendHistory(histKey, tabId, prompt, ask.full, userImages?.length ? userImages : undefined);
+    await appendHistory(histKey, tabId, prompt, ask.full, userImages?.length ? userImages : undefined, ts);
     activeAsks.delete(tab.id);
     chrome.storage.session.remove(progKey).catch(() => {});
 
@@ -1008,9 +1008,9 @@ async function addUsage(turn) {
   return t;
 }
 
-async function appendHistory(histKey, tabId, q, a, imgs) {
+async function appendHistory(histKey, tabId, q, a, imgs, ts) {
   const arr = await loadHist(histKey, tabId);
-  arr.push({ q, a, t: Date.now(), ...(imgs?.length ? { imgs } : {}) });
+  arr.push({ q, a, t: Date.now(), ...(imgs?.length ? { imgs } : {}), ...(ts ? { ts } : {}) });
   await saveHist(histKey, arr); // durable (chrome.storage.local), no cap — keeps every question
 }
 

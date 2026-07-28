@@ -4,6 +4,13 @@
 import { renderMarkdown } from "./lib/markdown.js";
 import { histKeyForTab, loadHist, saveHist, removeHist } from "./lib/keys.js";
 
+// Set HTML without innerHTML on live elements (AMO compliance): DOMParser doesn't
+// execute scripts/load resources, and replaceChildren avoids innerHTML entirely.
+// renderMarkdown already escapes all input and produces only known-safe tags.
+function setHTML(el, html) {
+  el.replaceChildren(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
+}
+
 const $ = (id) => document.getElementById(id);
 const log = $("log");
 const statusEl = $("status");
@@ -204,11 +211,11 @@ function bubbleBtn(svg, title) {
   b.type = "button";
   b.className = "bubble-btn";
   b.title = title;
-  b.innerHTML = svg;
+  setHTML(b, svg);
   return b;
 }
 
-function addTurn(q, imgUrls) {
+function addTurn(q, imgUrls, ts) {
   log.querySelector(".empty")?.remove();
   const wrap = document.createElement("div");
   wrap.className = "turn";
@@ -216,6 +223,12 @@ function addTurn(q, imgUrls) {
   qEl.className = "q";
   qEl.textContent = q;
   wrap.append(qEl);
+  if (ts) {
+    const tsEl = document.createElement("div");
+    tsEl.className = "q-ts";
+    tsEl.textContent = ts;
+    wrap.append(tsEl);
+  }
   const urls = Array.isArray(imgUrls) ? imgUrls : [];
   if (urls.length) {
     const thumbs = document.createElement("div");
@@ -346,9 +359,9 @@ function onMessage(msg) {
       break;
     case "ANSWER_RESUME":
       // Reattached to an answer that was streaming when the popup closed/reopened.
-      activeAnswerEl = addTurn(msg.prompt, msg.imgs ? msg.imgs.map((b) => `data:image/jpeg;base64,${b}`) : null);
+      activeAnswerEl = addTurn(msg.prompt, msg.imgs ? msg.imgs.map((b) => `data:image/jpeg;base64,${b}`) : null, msg.ts);
       activeRaw = msg.full || "";
-      activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+      setHTML(activeAnswerEl, renderMarkdown(activeRaw));
       activeAnswerEl.rawA = activeRaw;
       stickToBottom();
       $("exportqa").classList.remove("hidden");
@@ -363,7 +376,7 @@ function onMessage(msg) {
     case "TOKEN":
       if (activeAnswerEl) {
         activeRaw += msg.text;
-        activeAnswerEl.innerHTML = renderMarkdown(activeRaw);
+        setHTML(activeAnswerEl, renderMarkdown(activeRaw));
         activeAnswerEl.rawA = activeRaw;
         stickToBottom();
       }
@@ -524,14 +537,15 @@ async function ask() {
   askBtn.disabled = true;
   const imgUrls = attachedFiles.filter((a) => a.kind === "image").map((a) => a.url);
   const attachedTexts = attachedFiles.filter((a) => a.kind === "text").map((a) => ({ name: a.name, content: a.content }));
-  activeAnswerEl = addTurn(prompt, imgUrls.length ? imgUrls : null);
+  const ts = currentMode === "video" ? await currentVideoTs() : "";
+  activeAnswerEl = addTurn(prompt, imgUrls.length ? imgUrls : null, ts);
   refreshTurnState();
   log.scrollTop = log.scrollHeight;
   $("exportqa").classList.remove("hidden");
   activeRaw = "";
   setStatus("Working…");
   send({
-    type: "ASK", prompt, tabId: tab?.id, histKey: histKeyForTab(tab), mode: currentMode,
+    type: "ASK", prompt, tabId: tab?.id, histKey: histKeyForTab(tab), mode: currentMode, ts,
     userImages: attachedFiles.filter((a) => a.kind === "image").map((a) => a.b64),
     attachedTexts: attachedTexts.length ? attachedTexts : undefined,
     windowId: tab?.windowId,
@@ -817,7 +831,7 @@ function buildMarkdown({ title, url, host, when, hist }) {
   if (host) L.push(`**Site:** ${host}`);
   L.push(`**Exported:** ${when}`, "", "---", "");
   hist.forEach((t, i) => {
-    L.push(`## Q${i + 1}: ${(t.q || "").trim()}`, "", demoteAnswerH2((t.a || "").trim()), "");
+    L.push(`## Q${i + 1}: ${(t.q || "").trim()}${t.ts ? " " + t.ts : ""}`, "", demoteAnswerH2((t.a || "").trim()), "");
   });
   return L.join("\n").trim() + "\n";
 }
@@ -1133,9 +1147,9 @@ document.addEventListener("drop", async (e) => {
     const store = await chrome.storage.session.get([draftKey, attachKey, stashKey]);
     const hist = await loadHist(histKeyForTab(tab), tab.id);
     for (const t of hist) {
-      const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null));
+      const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null), t.ts);
       aEl.rawA = t.a;
-      aEl.innerHTML = renderMarkdown(t.a);
+      setHTML(aEl, renderMarkdown(t.a));
     }
     $("exportqa").classList.toggle("hidden", hist.length === 0);
     // Restore an unsent draft for this tab.
