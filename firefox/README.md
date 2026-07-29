@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.26**.
+Current version: **0.8.27**.
 
 ## What it does
 
@@ -475,6 +475,7 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   was asked (below the question, above thumbnails); export includes it after the question
   title (`## Q1: question [01:22:51]`). Also: replaced `innerHTML` with
   `DOMParser`+`replaceChildren` (AMO security compliance).
+- **0.8.27** — PAL now auto-switches to Video mode when opened on YouTube or Udemy.
 
 ## Disclaimer
 

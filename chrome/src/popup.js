@@ -1133,6 +1133,10 @@ document.addEventListener("drop", async (e) => {
   // Restore the mode.
   const modeStore = await chrome.storage.local.get("vt_mode");
   currentMode = modeStore.vt_mode || "video";
+  // Auto-switch to video mode on known video platforms (YouTube, Udemy).
+  if (tab && /youtube\.com\/(watch|embed)|youtu\.be\/|udemy\.com\//.test(tab.url || "")) {
+    currentMode = "video";
+  }
   $("mode").value = currentMode;
   if (tab && /youtube\.com\/(watch|embed)|youtu\.be\//.test(tab.url || "")) {
     $("loadtx").dataset.visible = "1";
