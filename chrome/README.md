@@ -8,7 +8,7 @@ with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 > This folder is the Chrome build; see [`firefox/`](../firefox/) for the Firefox
 > build, or install it from AMO.
 
-Current version: **0.8.27**.
+Current version: **0.8.28**.
 
 ## What it does
 
@@ -484,6 +484,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
   title (`## Q1: question [01:22:51]`). Also: replaced `innerHTML` with
   `DOMParser`+`replaceChildren` (AMO security compliance).
 - **0.8.27** — PAL now auto-switches to Video mode when opened on YouTube or Udemy.
+- **0.8.28** — Stashed questions are now durable per video/page (local storage), surviving
+  browser restart and reloading on revisit — just like the Q&A history. Loading a stashed
+  question with a `[HH:MM:SS]` timestamp also seeks the video to that position (paused).
 
 ## Disclaimer
 

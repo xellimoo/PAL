@@ -32,14 +32,16 @@ function pageHash(tab) {
 
 // Durable history key for a tab: per video/page when one can be derived, else a
 // per-tab fallback (so blank/local pages still work).
-export function histKeyForTab(tab) {
+export function keyForTab(tab, prefix) {
   if (!tab) return null;
   const vid = videoId(tab.url);
-  if (vid) return "vt_qa_" + vid;
+  if (vid) return prefix + vid;
   const h = pageHash(tab);
-  if (h) return "vt_qa_" + h;
-  return tab.id != null ? `vt_qa_tab_${tab.id}` : null;
+  if (h) return prefix + h;
+  return tab.id != null ? `${prefix}tab_${tab.id}` : null;
 }
+export function histKeyForTab(tab) { return keyForTab(tab, "vt_qa_"); }
+export function stashKeyForTab(tab) { return keyForTab(tab, "vt_stash_"); }
 
 // Read this tab's history from local storage. On first access after the upgrade, migrates
 // the legacy vt_hist_<tabId> (session) into the new local key. Returns [] if none.

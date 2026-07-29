@@ -2,7 +2,7 @@
 // answer keeps streaming/finishing even if this popup closes (corrected-spec §1).
 
 import { renderMarkdown } from "./lib/markdown.js";
-import { histKeyForTab, loadHist, saveHist, removeHist } from "./lib/keys.js";
+import { histKeyForTab, stashKeyForTab, loadHist, saveHist, removeHist } from "./lib/keys.js";
 
 // Set HTML without innerHTML on live elements (AMO compliance): DOMParser doesn't
 // execute scripts/load resources, and replaceChildren avoids innerHTML entirely.
@@ -672,8 +672,8 @@ function renderQList() {
 
 // --- Stashed questions (save a question for later, restore it from a list) ---
 function saveStash() {
-  if (stashed.length) chrome.storage.session.set({ [stashKey]: stashed });
-  else chrome.storage.session.remove(stashKey);
+  if (stashed.length) chrome.storage.local.set({ [stashKey]: stashed });
+  else chrome.storage.local.remove(stashKey);
 }
 // Format seconds as HH:MM:SS (mirrors lib/context.js fmt, used for the video timestamp).
 function fmtTs(t) {
@@ -702,6 +702,19 @@ async function currentVideoTs() {
   } catch {
     return "";
   }
+}
+// Seek the target tab's <video> to `sec` and pause. Silent on failure (no access, no
+// video, etc.) — best-effort, used when loading a stashed question with a timestamp.
+async function seekVideo(sec) {
+  try {
+    const tab = await getTargetTab();
+    if (!tab?.id) return;
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (s) => { const v = document.querySelector("video"); if (v) { v.currentTime = s; v.pause(); } },
+      args: [sec],
+    });
+  } catch {}
 }
 $("stash").addEventListener("click", async () => {
   const q = promptEl.value.trim();
@@ -758,11 +771,16 @@ function renderStash() {
     row.addEventListener("click", () => {
       stashed.splice(i, 1);
       saveStash();
-      promptEl.value = item; // full text, including the timestamp
-      chrome.storage.session.set({ [draftKey]: item }); // survive popup close/reopen
+      // Extract the [HH:MM:SS] timestamp (for the seek), then strip it — the user wants
+      // just the question in the input.
+      const m = item.match(/\[(\d{1,2}):(\d{2}):(\d{2})\]/);
+      const q = m ? item.replace(/\s*\[\d{1,2}:\d{2}:\d{2}\]\s*$/, "").trim() : item;
+      promptEl.value = q;
+      chrome.storage.session.set({ [draftKey]: q }); // survive popup close/reopen
       promptEl.focus();
       stashPop.classList.add("hidden");
       setStatus("Loaded from stash — press Ask when ready.");
+      if (m) seekVideo(parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]));
     });
     // Delete this stashed question (without loading it).
     const del = bubbleBtn(DEL_SVG, "Delete this stashed question");
@@ -1147,8 +1165,8 @@ document.addEventListener("drop", async (e) => {
   if (tab) {
     draftKey = `vt_draft_${tab.id}`;
     attachKey = `vt_attach_${tab.id}`;
-    stashKey = `vt_stash_${tab.id}`;
-    const store = await chrome.storage.session.get([draftKey, attachKey, stashKey]);
+    stashKey = stashKeyForTab(tab);
+    const store = await chrome.storage.session.get([draftKey, attachKey]);
     const hist = await loadHist(histKeyForTab(tab), tab.id);
     for (const t of hist) {
       const aEl = addTurn(t.q, Array.isArray(t.imgs) ? t.imgs.map((b) => `data:image/jpeg;base64,${b}`) : (t.img ? [`data:image/jpeg;base64,${t.img}`] : null), t.ts);
@@ -1165,7 +1183,18 @@ document.addEventListener("drop", async (e) => {
       );
       renderAttachChips();
     }
-    stashed = Array.isArray(store[stashKey]) ? store[stashKey] : [];
+    const stashStore = await chrome.storage.local.get(stashKey);
+    stashed = Array.isArray(stashStore[stashKey]) ? stashStore[stashKey] : [];
+    // Migrate from the legacy per-tab session key.
+    if (!stashed.length && tab.id != null) {
+      const oldKey = `vt_stash_${tab.id}`;
+      const old = (await chrome.storage.session.get(oldKey))[oldKey];
+      if (Array.isArray(old) && old.length) {
+        stashed = old;
+        chrome.storage.local.set({ [stashKey]: stashed }).catch(() => {});
+        chrome.storage.session.remove(oldKey).catch(() => {});
+      }
+    }
   }
   promptEl.focus();
   if (!log.children.length) {
