@@ -205,6 +205,7 @@ function stickToBottom() {
 
 const COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const DEL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+const MD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15V9l3 3 3-3v6"/><path d="M16.5 9v6"/><path d="M14.5 13l2 2 2-2"/></svg>';
 
 function bubbleBtn(svg, title) {
   const b = document.createElement("button");
@@ -242,12 +243,16 @@ function addTurn(q, imgUrls, ts) {
     }
     wrap.append(thumbs);
   }
-  // Question actions (outside the bubble, bottom-right): copy + delete the turn.
+  // Question actions (outside the bubble, bottom-right): copy + copy as Markdown + delete the turn.
   const qActions = document.createElement("div");
   qActions.className = "turn-actions";
   const copyQ = bubbleBtn(COPY_SVG, "Copy question");
   copyQ.addEventListener("click", () => copyText(q));
   qActions.append(copyQ);
+  const copyMD = bubbleBtn(MD_SVG, "Copy question + answer as Markdown");
+  copyMD.classList.add("copy-md");
+  copyMD.addEventListener("click", () => copyText(turnMarkdown(q, ts, aEl), "Markdown copied to clipboard."));
+  qActions.append(copyMD);
   const delBtn = bubbleBtn(DEL_SVG, "Delete this question and its answer");
   delBtn.classList.add("del-turn");
   delBtn.addEventListener("click", () => deleteTurnEl(wrap));
@@ -270,13 +275,21 @@ function addTurn(q, imgUrls, ts) {
 }
 
 // Copy text to the clipboard with brief status feedback.
-async function copyText(text) {
+async function copyText(text, msg = "Copied to clipboard.") {
   try {
     await navigator.clipboard.writeText(text || "");
-    setStatus("Copied to clipboard.");
+    setStatus(msg);
   } catch {
     setStatus("Couldn't access the clipboard.", true);
   }
+}
+
+// One Q&A turn as Markdown, in the same shape the .md export uses: the question
+// as a "## Q:" heading (video timestamp kept when present), the answer's raw
+// markdown below it with its "##" demoted so it can't read like a question.
+function turnMarkdown(q, ts, aEl) {
+  const L = [`## Q: ${(q || "").trim()}${ts ? " " + ts : ""}`, "", demoteAnswerH2((aEl.rawA || "").trim())];
+  return L.join("\n").trim() + "\n";
 }
 
 // Delete one Q&A turn from the DOM and from this tab's stored history. The
@@ -310,14 +323,16 @@ async function deleteTurnEl(wrap) {
   setStatus("Question deleted.");
 }
 
-// While a turn's answer is streaming: disable its delete button and hide its
-// answer-copy button (shown again once generation finishes). Called whenever
-// activeAnswerEl changes.
+// While a turn's answer is streaming: disable its delete and copy-Markdown
+// buttons and hide its answer-copy button (shown again once generation
+// finishes). Called whenever activeAnswerEl changes.
 function refreshTurnState() {
   for (const turn of log.querySelectorAll(".turn")) {
     const streaming = turn.querySelector(".a") === activeAnswerEl;
     const del = turn.querySelector(".del-turn");
     if (del) del.disabled = streaming;
+    const md = turn.querySelector(".copy-md");
+    if (md) md.disabled = streaming;
     const aActions = turn.querySelector(".a-actions");
     if (aActions) aActions.classList.toggle("hidden", streaming);
   }

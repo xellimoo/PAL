@@ -4,7 +4,7 @@
 screenshot the current frame, and ask an AI tutor about it. Universal BYOK: works
 with any OpenAI-compatible, Anthropic, or native Gemini endpoint.
 
-Current version: **0.8.28**.
+Current version: **0.8.29**.
 
 ## What it does
 
@@ -483,6 +483,9 @@ Bundled third-party code is covered by `THIRD_PARTY_LICENSES.txt`.
 - **0.8.28** — Stashed questions are now durable per video/page (local storage), surviving
   browser restart and reloading on revisit — just like the Q&A history. Loading a stashed
   question with a `[HH:MM:SS]` timestamp also seeks the video to that position (paused).
+- **0.8.29** — Each question bubble now has a copy-as-Markdown button (next to copy and
+  delete): one click puts the question and its answer on the clipboard as Markdown, ready
+  to paste into your notes.
 
 ## Disclaimer
 
